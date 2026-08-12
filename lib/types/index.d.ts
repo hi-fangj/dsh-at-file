@@ -1,13 +1,17 @@
 /**
  * dsh-at-file host plugin: mounts the `atFile` Typert Remote service
- * (workspace file search + bounded reads for the browser's @file picker).
- * The client half ships in the same package (`./client`); the web server
- * serves it under /plugins/dsh-at-file/client.js.
+ * (workspace file search + bounded reads for the browser's @file picker) and
+ * registers its strict Typert manifest so the Host Gateway resolves the wire
+ * endpoints without consulting decorator marker tables. The client half
+ * ships in the same package (`./client`); the web server serves it under
+ * /plugins/dsh-at-file/client.js.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 /** Cordis plugin name (the Loader entry and client bundle id). */
 export declare const name = "dsh-at-file";
+/** Services required before load: the Typert registry the manifest registers into. */
+export declare const inject: string[];
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
     /** Hard cap on indexed files per workspace; the walk stops and reports truncation. */

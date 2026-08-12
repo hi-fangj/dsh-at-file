@@ -8,6 +8,7 @@
  */
 import { Context, symbols } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
+import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -28,15 +29,18 @@ function originalOf(service: object): object {
 }
 
 /** Mount the function-plugin module on a fresh context (harness test pattern). */
-function mount(ctx: Context, config?: plugin.Config): ReturnType<Context['plugin']> {
-  return ctx.plugin({ inject: plugin.inject, apply: plugin.apply }, config)
+async function mount(ctx: Context, config?: plugin.Config): Promise<ReturnType<Context['plugin']>> {
+  const registryFiber = ctx.plugin(TypertRegistry)
+  await registryFiber
+  const fiber = ctx.plugin({ inject: plugin.inject, apply: plugin.apply }, config)
+  await fiber
+  return fiber
 }
 
 describe('dsh-at-file host composition', () => {
   it('boots the plugin and registers the atFile service under its own key', async () => {
     const ctx = new Context()
-    const fiber = mount(ctx)
-    await fiber
+    const fiber = await mount(ctx)
     const runtime = ctx.get('atFile') as AtFileRuntime | undefined
     expect(runtime).toBeDefined()
     // The Gateway source-mode binding the wire dispatch relies on.
@@ -44,10 +48,19 @@ describe('dsh-at-file host composition', () => {
     await fiber.dispose()
   })
 
+  it('registers the strict Typert manifest so the gateway resolves both endpoints', async () => {
+    const ctx = new Context()
+    const fiber = await mount(ctx)
+    const registry = ctx.get('typert') as TypertRegistry
+    expect(registry.local.get('atFile/search')).toMatchObject({ service: 'atFile', method: 'search' })
+    expect(registry.local.get('atFile/read')).toMatchObject({ service: 'atFile', method: 'read' })
+    await fiber.dispose()
+    expect(registry.local.get('atFile/search')).toBeUndefined()
+  })
+
   it('exports search and read as Remote methods in declaration order', async () => {
     const ctx = new Context()
-    const fiber = mount(ctx)
-    await fiber
+    const fiber = await mount(ctx)
     const runtime = ctx.get('atFile') as AtFileRuntime
     expect(remoteMethods(originalOf(runtime)).map(marker => marker.method)).toEqual(['search', 'read'])
     await fiber.dispose()
@@ -55,8 +68,7 @@ describe('dsh-at-file host composition', () => {
 
   it('disposes the service with its fiber', async () => {
     const ctx = new Context()
-    const fiber = mount(ctx)
-    await fiber
+    const fiber = await mount(ctx)
     expect(ctx.get('atFile')).toBeDefined()
     await fiber.dispose()
     expect(ctx.get('atFile')).toBeUndefined()
@@ -68,8 +80,7 @@ describe('dsh-at-file host composition', () => {
     await writeFile(join(root, 'a.ts'), 'a\n')
     await writeFile(join(root, 'nested', 'b.ts'), 'b\n')
     const ctx = new Context()
-    const fiber = mount(ctx)
-    await fiber
+    const fiber = await mount(ctx)
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
       const files = await runtime.search(agentWith(root), new AbortController().signal)
@@ -82,8 +93,7 @@ describe('dsh-at-file host composition', () => {
 
   it('search refuses a session without a workspace', async () => {
     const ctx = new Context()
-    const fiber = mount(ctx)
-    await fiber
+    const fiber = await mount(ctx)
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
       await expect(runtime.search(agentWith(undefined), new AbortController().signal))
@@ -97,8 +107,7 @@ describe('dsh-at-file host composition', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-runtime-'))
     await writeFile(join(root, 'c.ts'), 'content\n')
     const ctx = new Context()
-    const fiber = mount(ctx, { maxIndexedFiles: 10, maxFileBytes: 4, ignoreDirs: [] })
-    await fiber
+    const fiber = await mount(ctx, { maxIndexedFiles: 10, maxFileBytes: 4, ignoreDirs: [] })
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
       await expect(runtime.read(join(root, 'c.ts'), new AbortController().signal))

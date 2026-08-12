@@ -7,6 +7,8 @@ Out-of-tree DeepSeek Harness plugin (host + Web client bundle). Read [dsh-plugin
 ```
 src/index.ts        host entry: function plugin (name/inject/Config/apply, no default export)
 src/runtime.ts      AtFileRuntime (TypertRemoteService, @Remote search/read) — wire namespace `atFile`
+src/contract.ts     one shared descriptor set + zod codecs (host manifest and client contribution import it)
+src/typert.ts       strict host Typert manifest, registered via ctx.typert.register
 src/files.ts        bounded workspace index walk + complete-result-bounded reads over node:fs
 src/invariant.ts    ./invariant companion (real `No runtime invariant:` reason)
 src/client/         browser half, served as the single file /plugins/dsh-at-file/client.js
@@ -20,7 +22,8 @@ tests/              node-env specs; jsdom pragma on the two browser specs
 
 ## Contracts with the harness (do not drift)
 
-- The wire endpoints are `atFile/search` (agent lookup → workspace index) and `atFile/read` (absolute path → bounded text). The Host Gateway resolves them from the `@Remote` methods' parameter NAMES (`agent`, `signal`); the client descriptors in `remote.ts` must keep the same wire fields (`agentId`, `path`).
+- The wire endpoints are `atFile/search` (agent lookup → workspace index) and `atFile/read` (absolute path → bounded text). The Host Gateway resolves them through the **strict Typert manifest** (`src/typert.ts`, registered via `ctx.typert.register`) — never through `@Remote` marker tables, because the harness's source-launch dev environment loads the gateway from protocol `src` while a profile-loaded plugin bundle loads protocol `lib` (two marker tables). The `@Remote` decorators stay for documentation and lib-consistent deployments.
+- One descriptor set lives in `src/contract.ts` and is shared verbatim by the host manifest and the client contribution (`src/client/remote.ts`); wire fields (`agentId`, `path`), the trailing `signal`, and the result fields are pinned there. The agent lookup codec's `typeSymbol` must stay `@deepseek-ai/dsh-session/types#SessionId` — the gateway's strict path rejects any other symbol.
 - Client code composes only through the standing seams: `ctx.remote.$mount`, `inputTriggers.registerSource`, `ctx.slots.register`, `ctx.locale.register`. No harness source is imported at runtime; every harness package is an optional peer (type-only where possible).
 - The web server serves exactly one file per client plugin: keep the client bundle single-file; styles are the injected `styles.ts` string (no CSS artifacts).
 

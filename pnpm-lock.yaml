@@ -45,6 +45,9 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: link:../dsh/packages/typert/protocol
         version: link:../dsh/packages/typert/protocol
+      '@deepseek-ai/dsh-typert-registry':
+        specifier: link:../dsh/packages/typert/registry
+        version: link:../dsh/packages/typert/registry
       '@deepseek-ai/schemastery':
         specifier: link:../dsh/vendor/schemastery
         version: link:../dsh/vendor/schemastery
