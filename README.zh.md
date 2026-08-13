@@ -1,7 +1,5 @@
 # dsh-at-file
 
-<p align="center"><img src="assets/logo.svg" width="128" alt="dsh-at-file logo" /></p>
-
 DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框输入 `@`，边输入边智能搜索工作区文件（和目录），回车附加，发送时把引用内容交给模型。
 
 ![@ 文件提及效果演示](assets/screenshots/show-case.png)
