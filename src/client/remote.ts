@@ -17,6 +17,11 @@ export const AT_FILE_REMOTE: TypertRemoteContribution = {
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
+  // Typed face of the mounted namespace. Note: the runtime access is NOT the
+  // dotted `ctx.remote.atFile` read — that path walks the cordis fiber chain
+  // and stops at the Loader's runtime-less internal forks between a plugin
+  // entry and the root fiber. The plugin resolves the namespace service
+  // through `ctx.reflect.get('remote.atFile')` instead (see client/index.ts).
   /** The `atFile` namespace face mounted under `ctx.remote.atFile`. */
   interface TypertRemoteNamespace$617446696c65 {
     search: (agentId: SessionId, signal?: AbortSignal) => Promise<RemoteResult<readonly import('../contract.ts').FileEntry[]>>

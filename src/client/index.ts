@@ -25,6 +25,12 @@ import { adoptStyles } from './styles.ts'
 /** Required services: picker pipeline, session projection, carrier, Remote face, slots, locale. */
 export const inject = ['inputTriggers', 'sessions', 'connection', 'remote', 'slots', 'locale']
 
+/** The mounted atFile namespace service's callable face. */
+interface AtFileNamespaceFace {
+  search(sessionId: SessionId, signal?: AbortSignal): Promise<{ ok: true; value: readonly FileEntry[] } | { ok: false; error: { code: string; message: string; details: object } }>
+  read(path: string, signal?: AbortSignal): Promise<{ ok: true; value: FileContent } | { ok: false; error: { code: string; message: string; details: object } }>
+}
+
 /**
  * Compose the @file surface.
  * @param ctx - client root context.
@@ -32,9 +38,24 @@ export const inject = ['inputTriggers', 'sessions', 'connection', 'remote', 'slo
 export function apply(ctx: ClientContext): void {
   adoptStyles()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-at-file: dictionaries')
+
+  // The mounted namespace handle. It resolves through the service store
+  // (`ctx.reflect.get`), not through `ctx.remote.atFile`: the generated-style
+  // dotted read walks the cordis fiber chain, which stops at the Loader's
+  // runtime-less internal forks between a plugin entry and the root fiber —
+  // the namespace service mounted under the gateway entry is unreachable
+  // that way (the store path resolves it by isolation label instead).
+  let atFile: AtFileNamespaceFace | undefined
   ctx.effect(async () => {
     const dispose = await ctx.remote.$mount(AT_FILE_REMOTE)
-    return () => { void dispose() }
+    atFile = (ctx.reflect as unknown as { get(name: string): unknown }).get('remote.atFile') as AtFileNamespaceFace | undefined
+    if (atFile === undefined) {
+      throw new Error('dsh-at-file: the atFile Remote namespace did not mount')
+    }
+    return () => {
+      atFile = undefined
+      void dispose()
+    }
   }, 'dsh-at-file: remote')
 
   const connection = ctx.get('connection') as ConnectionHandle
@@ -42,13 +63,15 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
 
   const search = async (sessionId: SessionId, signal: AbortSignal): Promise<readonly FileEntry[]> => {
-    const result = await ctx.remote.atFile.search(sessionId, signal)
+    if (atFile === undefined) throw new Error('dsh-at-file: the atFile Remote is not mounted')
+    const result = await atFile.search(sessionId, signal)
     if (!result.ok) throw new Error(`search failed: ${result.error.code}: ${result.error.message}`)
     return result.value
   }
 
   const read = async (path: string, signal: AbortSignal): Promise<FileContent> => {
-    const result = await ctx.remote.atFile.read(path, signal)
+    if (atFile === undefined) throw new Error('dsh-at-file: the atFile Remote is not mounted')
+    const result = await atFile.read(path, signal)
     if (!result.ok) throw new Error(result.error.message)
     return result.value
   }

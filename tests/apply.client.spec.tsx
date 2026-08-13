@@ -20,6 +20,8 @@ interface BootOptions {
   atFileSearch?: (sessionId: SessionId, signal: AbortSignal) => Promise<RemoteResult<readonly { path: string; relative: string }[]>>
   atFileRead?: (path: string, signal: AbortSignal) => Promise<RemoteResult<{ content: string; bytes: number }>>
   openPath?: () => Promise<{ result: { ok: true } | { ok: false; error: { message: string } } }>
+  /** Omit the mounted namespace service (the "mount never happened" arm). */
+  withoutNamespace?: boolean
 }
 
 /** One registered trigger source, narrowed to the members the assertions read. */
@@ -36,19 +38,21 @@ async function boot(options: BootOptions = {}) {
   const registerSource = vi.fn(() => () => {})
   const mount = vi.fn(async () => () => {})
   const localeRegister = vi.fn(() => () => {})
-  const bind = vi.fn(() => (key: string) => key)
+  const bind = vi.fn(() => (key: string, params?: Record<string, string>) => (params?.message ? `${key}: ${params.message}` : key))
   const slotsRegister = vi.fn()
   const slotsInject = vi.fn((_name: string, factory: () => void) => { factory() })
   const openPath = vi.fn(options.openPath ?? (async () => ({ result: { ok: true as const } })))
   ctx.provide('inputTriggers', { registerSource })
   ctx.provide('connection', { api: { host: { openPath } } })
-  ctx.provide('remote', {
-    $mount: mount,
-    atFile: {
+  ctx.provide('remote', { $mount: mount })
+  // The real gateway installs the namespace as its own service; the plugin
+  // resolves it through the store (ctx.reflect.get('remote.atFile')).
+  if (options.withoutNamespace !== true) {
+    ctx.provide('remote.atFile', {
       search: options.atFileSearch ?? (async () => ({ ok: true as const, value: [] })),
       read: options.atFileRead ?? (async () => ({ ok: true as const, value: { content: 'x\n', bytes: 2 } })),
-    },
-  })
+    })
+  }
   ctx.provide('slots', { inject: slotsInject, register: slotsRegister })
   ctx.provide('locale', { register: localeRegister, bind })
   ctx.provide('sessions', {})
@@ -109,6 +113,14 @@ describe('dsh-at-file client apply', () => {
     expect(text).toBe('<file path="/ws/a.ts">\nx\n</file>')
   })
 
+  it('fails loud when the namespace service never mounted', async () => {
+    const booted = await boot({ withoutNamespace: true })
+    const source = registered(booted)
+    await expect(source.candidates(s1, { query: 'a', position: 'inline', signal: signal() }))
+      .rejects.toThrow(/not mounted/)
+    await expect(source.codec!.serialize('/ws/a.ts', signal())).rejects.toThrow(/not mounted/)
+  })
+
   it('registers the dock with its inject face routed to the host opener', async () => {
     const { slotsInject, slotsRegister, openPath } = await boot()
     expect(slotsInject).toHaveBeenCalledWith('conversation.input.dock', expect.any(Function))
@@ -152,7 +164,8 @@ describe('dsh-at-file client apply', () => {
     const mount = vi.fn(async () => unmount)
     ctx.provide('inputTriggers', { registerSource: vi.fn(() => registerDispose) })
     ctx.provide('connection', { api: { host: { openPath: async () => ({ result: { ok: true as const } }) } } })
-    ctx.provide('remote', { $mount: mount, atFile: { search: async () => ({ ok: true as const, value: [] }), read: async () => ({ ok: true as const, value: { content: 'x\n', bytes: 2 } }) } })
+    ctx.provide('remote', { $mount: mount })
+    ctx.provide('remote.atFile', { search: async () => ({ ok: true as const, value: [] }), read: async () => ({ ok: true as const, value: { content: 'x\n', bytes: 2 } }) })
     ctx.provide('slots', { inject: vi.fn(), register: vi.fn() })
     ctx.provide('locale', { register: vi.fn(() => () => {}), bind: vi.fn(() => (key: string) => key) })
     ctx.provide('sessions', {})
