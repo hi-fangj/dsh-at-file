@@ -2,6 +2,8 @@
 
 DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框输入 `@`，边输入边智能搜索工作区文件（和目录），回车附加，发送时把引用内容交给模型。
 
+![@ 文件提及效果演示](assets/screenshots/show-case.png)
+
 ```
 输入框:   修复 README  @README.  ← 光标处浮出文件选择器
             ┌────────────────────────────┐
