@@ -1,5 +1,7 @@
 # dsh-at-file
 
+<p align="center"><img src="assets/logo.svg" width="128" alt="dsh-at-file logo" /></p>
+
 Codex-style `@file` mentions for the DeepSeek Harness web GUI. Type `@` in the composer, search the workspace files (and directories) as you type, press Enter to attach, and the referenced content ships to the model when the message is sent.
 
 ![@file mention in action](assets/screenshots/show-case.png)
