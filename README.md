@@ -20,7 +20,7 @@ The draft keeps the plain-text `@path` token (no chip, no overflow); the Host ex
 ## Install
 
 ```sh
-dsh plugin --profile <name> add file:/path/to/dsh-at-file
+dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/heads/main.tar.gz
 ```
 
 Restart the web server so the host half and the served client bundle pick up the plugin. The plugin needs the standard web bundle composition (the `ui-input-trigger` `@` pipeline, `api-gateway` client Remote, and the conversation slots) — the default `dsh web` profile has all of them.

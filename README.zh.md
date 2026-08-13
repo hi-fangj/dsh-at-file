@@ -20,7 +20,7 @@ DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框�
 ## 安装
 
 ```sh
-dsh plugin --profile <name> add file:/path/to/dsh-at-file
+dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/heads/main.tar.gz
 ```
 
 随后重启 web 服务以加载 host 半部分与新的 client bundle。插件依赖标准 web bundle 组合（`ui-input-trigger` 的 `@` 管线、`api-gateway` client Remote、会话插槽），默认的 `dsh web` profile 均已包含。
