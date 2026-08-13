@@ -1,8 +1,9 @@
 /**
  * dsh-at-file host plugin: mounts the `atFile` Typert Remote service
- * (workspace file search + bounded reads for the browser's @file picker) and
- * registers its strict Typert manifest so the Host Gateway resolves the wire
- * endpoints without consulting decorator marker tables. The client half
+ * (workspace index search for the browser's @file picker), registers its
+ * strict Typert manifest, registers the settings enable switch, and expands
+ * `@path` mentions at each agent's pre-step boundary — the model reads the
+ * referenced file or directory content without a wire read. The client half
  * ships in the same package (`./client`); the web server serves it under
  * /plugins/dsh-at-file/client.js.
  */
@@ -10,15 +11,20 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 // Type-only: brings the `ctx.typert` Context merge into this program.
 import type {} from '@deepseek-ai/dsh-typert-registry'
+// Type-only: brings the `ctx.settings` and `ctx.agents` Context merges in.
+import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-agent'
 import { AtFileRuntime } from './runtime.ts'
 import { TYPERT_MANIFEST } from './typert.ts'
+import { registerAtFileSettings } from './settings.ts'
+import { mentionPreStep } from './mention.ts'
 import type { ResolvedConfig } from './types.ts'
 
 /** Cordis plugin name (the Loader entry and client bundle id). */
 export const name = 'dsh-at-file'
 
-/** Services required before load: the Typert registry the manifest registers into. */
-export const inject = ['typert']
+/** Services required before load: the Typert registry, the settings provider, and the agent registry. */
+export const inject = ['typert', 'settings', 'agents']
 
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
@@ -43,17 +49,36 @@ export const Config = z.object({
 })
 
 /**
- * Mount the atFile service.
+ * Mount the atFile service and the pre-step mention expansion.
  * @param ctx - host cordis context.
  * @param config - validated plugin configuration (schema defaults applied).
  */
 export function apply(ctx: Context, config?: Config): void {
   const resolved: ResolvedConfig = Config(config ?? {})
-  new AtFileRuntime(ctx, resolved)
-  // Strict endpoint registration: the gateway resolves atFile/search and
-  // atFile/read from this manifest, independent of decorator marker state.
+  // The durable enable switch: the runtime and the boundary read its live
+  // value per call, so toggling it in the Web settings takes effect immediately.
+  const settings = registerAtFileSettings(ctx)
+  const isEnabled = (): boolean => settings.get().enabled
+  new AtFileRuntime(ctx, resolved, isEnabled)
+  // Strict endpoint registration: the gateway resolves atFile/search from
+  // this manifest, independent of decorator marker state.
   ctx.effect(() => {
     const dispose = ctx.typert.register(TYPERT_MANIFEST)
     return () => { void dispose() }
   }, 'dsh-at-file: typert manifest')
+
+  // Expand @path mentions for every agent, at its pre-step boundary. The
+  // listener lives on the agent's scope (the event is agent-scoped), so it
+  // registers per created agent and withdraws with it. The boundary logic is
+  // `mentionPreStep` (unit-tested); this is the scoped lifecycle glue.
+  /* v8 ignore start -- agent-scoped registration glue; the boundary behavior is mentionPreStep and the event plumbing is harness-owned. */
+  ctx.on('agent/created', ({ agent }) => {
+    agent.ctx.effect(() => {
+      const stop = agent.ctx.on('agent/pre-step', async ({ messages, signal }, next) => {
+        return mentionPreStep(agent, resolved, isEnabled, messages, signal, next)
+      })
+      return () => { stop() }
+    }, 'dsh-at-file: pre-step mention expansion')
+  })
+  /* v8 ignore stop */
 }

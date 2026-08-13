@@ -36,12 +36,21 @@ importers:
       '@deepseek-ai/dsh-client-ui-input-trigger':
         specifier: link:../dsh/packages/client/ui-input-trigger
         version: link:../dsh/packages/client/ui-input-trigger
+      '@deepseek-ai/dsh-client-ui-settings':
+        specifier: link:../dsh/packages/client/ui-settings
+        version: link:../dsh/packages/client/ui-settings
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: link:../dsh/packages/client/ui-slots
         version: link:../dsh/packages/client/ui-slots
       '@deepseek-ai/dsh-invariants':
         specifier: link:../dsh/packages/runtime-diagnostics/invariants
         version: link:../dsh/packages/runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: link:../dsh/packages/llm/llm
+        version: link:../dsh/packages/llm/llm
+      '@deepseek-ai/dsh-settings':
+        specifier: link:../dsh/packages/settings/settings
+        version: link:../dsh/packages/settings/settings
       '@deepseek-ai/dsh-typert-protocol':
         specifier: link:../dsh/packages/typert/protocol
         version: link:../dsh/packages/typert/protocol

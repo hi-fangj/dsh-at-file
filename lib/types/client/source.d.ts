@@ -2,17 +2,17 @@
  * The '@' input-trigger source: turns the ui-input-trigger pipeline into the
  * Codex-style file picker. `candidates` serves the smart-searched rows (the
  * workspace index is fetched once per session and filtered locally per
- * keystroke), `onPick` lands a chip carrying the absolute path, and the
- * reference codec expands that chip into the file content at submit time —
- * so the model reads the file while the draft keeps the short `@path`
- * clipboard projection. Pure factory over injected deps: the browser bundle
- * wires the real Remote and clock, tests wire stubs.
+ * keystroke); `onPick` lands the plain-text `@path` reference — the draft
+ * keeps a readable token (no chip), and the Host's pre-step boundary expands
+ * it into the file content when the message ships (plain-text-reference
+ * decision, matching the harness's skill source). Pure factory over injected
+ * deps: the browser bundle wires the real Remote and clock, tests wire stubs.
  */
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client';
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client';
-import type { FileContent, FileEntry } from './remote.ts';
+import type { FileEntry } from './remote.ts';
 import type { AtFileKey } from './locales.ts';
-/** Owner source name (the occurrence serializer routing key and chip owner). */
+/** Owner source name (the lexicon and decoration routing key). */
 export declare const SOURCE_NAME = "at-file";
 /** Design cap on visible picker rows (menu height mirrors the slash menu). */
 export declare const MAX_CANDIDATES = 12;
@@ -22,8 +22,6 @@ export declare const INDEX_TTL_MS = 30000;
 export interface AtFileSourceDeps {
     /** Search the addressed session's workspace index (Remote wrapper). */
     search(sessionId: SessionId, signal: AbortSignal): Promise<readonly FileEntry[]>;
-    /** Read one absolute path under the complete-result bounds; rejects on failure. */
-    read(path: string, signal: AbortSignal): Promise<FileContent>;
     /** Localized submit-failure copy. */
     t: (key: AtFileKey, params?: Record<string, string>) => string;
     /** Monotonic clock for index freshness (default Date.now). */

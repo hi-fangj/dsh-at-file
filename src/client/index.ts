@@ -1,11 +1,10 @@
 /**
  * dsh-at-file client plugin: the browser half of the Codex-style @file
  * mention. Mounts the atFile Remote namespace, registers the '@' trigger
- * source (floating picker + chip + submit-time content serialization), the
- * attached-files dock above the composer, and the locale dictionaries.
- * Everything composes through the existing seams: `ctx.remote.$mount` for
- * the wire face, `inputTriggers.registerSource` for the picker pipeline,
- * `ctx.slots.register` for the dock, `ctx.locale.register` for copy.
+ * source (floating picker landing a plain-text @path token), the
+ * attached-files dock above the composer (open/remove, gated by settings),
+ * the settings section, and the locale dictionaries. Content expansion is
+ * the Host's job at its pre-step boundary; this half only picks and links.
  */
 // Type-only: the ctx.remote merge and the forwarded Host-event face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
@@ -16,19 +15,23 @@ import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-inp
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the ctx.locale Context merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import { AT_FILE_REMOTE, type FileContent, type FileEntry } from './remote.ts'
+// Type-only: the ctx.settingsScope Context merge and the scope contract.
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
+import type { AtFileSettings, FileEntry } from '../contract.ts'
+import { AT_FILE_REMOTE } from './remote.ts'
 import { createAtFileSource } from './source.ts'
 import { FilesDock, type AtFileDockInjected } from './FilesDock.tsx'
+import { AtFileSection, type AtFileSectionInjected } from './SettingsSection.tsx'
 import { NS, en, zh } from './locales.ts'
 import { adoptStyles } from './styles.ts'
 
-/** Required services: picker pipeline, session projection, carrier, Remote face, slots, locale. */
-export const inject = ['inputTriggers', 'sessions', 'connection', 'remote', 'slots', 'locale']
+/** Required services: picker pipeline, session projection, carrier, Remote face, slots, locale, settings scope. */
+export const inject = ['inputTriggers', 'sessions', 'connection', 'remote', 'slots', 'locale', 'settingsScope']
 
 /** The mounted atFile namespace service's callable face. */
 interface AtFileNamespaceFace {
   search(sessionId: SessionId, signal?: AbortSignal): Promise<{ ok: true; value: readonly FileEntry[] } | { ok: false; error: { code: string; message: string; details: object } }>
-  read(path: string, signal?: AbortSignal): Promise<{ ok: true; value: FileContent } | { ok: false; error: { code: string; message: string; details: object } }>
 }
 
 /**
@@ -39,7 +42,7 @@ export function apply(ctx: ClientContext): void {
   adoptStyles()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-at-file: dictionaries')
 
-  // The mounted namespace handle. It resolves through the service store
+  // The mounted namespace handle resolves through the service store
   // (`ctx.reflect.get`), not through `ctx.remote.atFile`: the generated-style
   // dotted read walks the cordis fiber chain, which stops at the Loader's
   // runtime-less internal forks between a plugin entry and the root fiber —
@@ -61,25 +64,49 @@ export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   const inputTriggers = ctx.get('inputTriggers') as InputTriggerServiceContract
   const t = ctx.locale.bind(NS)
+  const scope = ctx.settingsScope.bind<AtFileSettings>({ namespace: 'at-file' })
 
+  // Relative → entry map backing the dock's open action (resolves a draft
+  // token to its absolute path from the last settled index).
+  const entryByRel = new Map<string, FileEntry>()
   const search = async (sessionId: SessionId, signal: AbortSignal): Promise<readonly FileEntry[]> => {
     if (atFile === undefined) throw new Error('dsh-at-file: the atFile Remote is not mounted')
     const result = await atFile.search(sessionId, signal)
     if (!result.ok) throw new Error(`search failed: ${result.error.code}: ${result.error.message}`)
+    for (const entry of result.value) entryByRel.set(entry.relative, entry)
     return result.value
   }
 
-  const read = async (path: string, signal: AbortSignal): Promise<FileContent> => {
-    if (atFile === undefined) throw new Error('dsh-at-file: the atFile Remote is not mounted')
-    const result = await atFile.read(path, signal)
-    if (!result.ok) throw new Error(result.error.message)
-    return result.value
-  }
-
-  const { source, invalidateAll } = createAtFileSource({ search, read, t })
+  const { source, invalidateAll } = createAtFileSource({ search, t })
   // Reconnect may have rebuilt the host: cached indexes and path maps die with it.
-  ctx.on('connection/reset', invalidateAll)
-  ctx.effect(() => inputTriggers.registerSource(source), 'dsh-at-file: source')
+  ctx.on('connection/reset', () => {
+    invalidateAll()
+    entryByRel.clear()
+  })
+  // The settings switch gates the picker live: the source registers while the
+  // namespace value is enabled (undefined before the first settings read —
+  // the schema default is enabled) and unregisters the moment it flips off.
+  let sourceRegistered = false
+  let sourceDispose = (): void => {}
+  const syncSource = (): void => {
+    const enabled = scope.getSnapshot().value?.enabled ?? true
+    if (enabled && !sourceRegistered) {
+      sourceDispose = inputTriggers.registerSource(source)
+      sourceRegistered = true
+    } else if (!enabled && sourceRegistered) {
+      sourceDispose()
+      sourceDispose = () => {}
+      sourceRegistered = false
+    }
+  }
+  ctx.effect(() => {
+    syncSource()
+    const off = scope.subscribe(syncSource)
+    return () => {
+      off()
+      sourceDispose()
+    }
+  }, 'dsh-at-file: source (settings-gated)')
 
   // The wire face of host.openPath (typed structurally: the connection
   // handle's IApiClient type lives behind the apiproxy package this plugin
@@ -96,11 +123,35 @@ export function apply(ctx: ClientContext): void {
     })
   }
 
+  const openRelative = (relative: string): void => {
+    const entry = entryByRel.get(relative)
+    if (entry === undefined) {
+      console.error('[dsh-at-file] open failed: no index entry for', relative)
+      return
+    }
+    openPath(entry.path)
+  }
+
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',
     id: 'at-file',
     order: 20,
     locale: NS,
-    inject: (): AtFileDockInjected => ({ onOpen: openPath }),
+    inject: (): AtFileDockInjected => ({
+      onOpen: openRelative,
+      hooks: { scope },
+    }),
   }, FilesDock))
+
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'at-file',
+    order: 55,
+    label: () => t('nav'),
+    locale: NS,
+    inject: (): AtFileSectionInjected => ({
+      hooks: { scope },
+      setEnabled: async (enabled: boolean) => { await scope.set('enabled', enabled) },
+    }),
+  }, AtFileSection))
 }

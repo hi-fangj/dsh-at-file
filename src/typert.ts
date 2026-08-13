@@ -29,11 +29,6 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: 'search',
             signature: 'search(agent: Agent, signal: AbortSignal): Promise<readonly FileEntry[]>',
           },
-          {
-            kind: 'method',
-            name: 'read',
-            signature: 'read(path: string, signal: AbortSignal): Promise<FileContent>',
-          },
         ],
         types: [],
       },

@@ -7,6 +7,11 @@ export declare const zh: {
     'dock.aria': string;
     'dock.remove': string;
     'error.read': string;
+    nav: string;
+    'settings.title': string;
+    'settings.subtitle': string;
+    'settings.enabled': string;
+    'settings.enabledDesc': string;
 };
 /** The `at-file` namespace key union. */
 export type AtFileKey = keyof typeof zh;
@@ -15,6 +20,11 @@ export declare const en: {
     'dock.aria': string;
     'dock.remove': string;
     'error.read': string;
+    nav: string;
+    'settings.title': string;
+    'settings.subtitle': string;
+    'settings.enabled': string;
+    'settings.enabledDesc': string;
 };
 /** Locale namespace id registered under ctx.locale. */
 export declare const NS = "at-file";

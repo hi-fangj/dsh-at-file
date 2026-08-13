@@ -10,7 +10,7 @@
 import { opendir, readFile, stat } from 'node:fs/promises'
 import type { Dir } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import type { FileContent, FileEntry } from './types.ts'
+import type { FileContent, FileEntry, ReadTreeFile, ReadTreeResult } from './contract.ts'
 
 /** Options for one bounded index pass. */
 export interface IndexOptions {
@@ -133,10 +133,13 @@ export async function indexWorkspace(
         const child = join(dir, dirent.name)
         if (dirent.isDirectory()) {
           if (ignore.has(dirent.name)) continue
+          // Directories are indexed entries too, so the picker can list and
+          // attach them (a directory attachment reads its files recursively).
+          files.push({ path: child, relative: displayRelative(root, child), kind: 'dir' })
           queue.push(child)
           continue
         }
-        if (dirent.isFile()) files.push({ path: child, relative: displayRelative(root, child) })
+        if (dirent.isFile()) files.push({ path: child, relative: displayRelative(root, child), kind: 'file' })
       }
     } finally {
       await closeOrSwallow(handle, signal)
@@ -185,4 +188,44 @@ export async function readFileText(
     throw new Error(`at-file: "${path}" is a binary file`)
   }
   return { content: buffer.toString('utf8'), bytes: buffer.byteLength }
+}
+
+/**
+ * Read every file under one directory recursively, bounded per file and in
+ * count. The result reports `truncated` when either bound cut the tree.
+ * @param path - absolute directory path (files and missing entries are refused).
+ * @param maxFiles - hard cap on read files.
+ * @param maxBytes - per-file cap (larger files refuse the whole tree).
+ * @param ignoreDirs - directory basenames the walk skips.
+ * @param signal - caller lifetime.
+ * @returns the read files (each `relative` to the directory root) and the truncation flag.
+ */
+export async function readTree(
+  path: string,
+  maxFiles: number,
+  maxBytes: number,
+  ignoreDirs: readonly string[],
+  signal?: AbortSignal,
+): Promise<ReadTreeResult> {
+  if (!isAbsolute(path)) {
+    throw new Error(`at-file: "${path}" is not an absolute path`)
+  }
+  const info = await raceAbort(stat(path), signal).catch((error: unknown) => {
+    /* v8 ignore start -- an abort or failure landing during the stat needs a stalled or racing filesystem. */
+    signal?.throwIfAborted()
+    throw new Error(`at-file: cannot read "${path}": ${messageOf(error)}`)
+    /* v8 ignore stop */
+  })
+  if (!info.isDirectory()) {
+    throw new Error(`at-file: "${path}" is not a directory`)
+  }
+  const index = await indexWorkspace(path, { maxFiles, ignoreDirs }, signal)
+  const files: ReadTreeFile[] = []
+  for (const entry of index.files) {
+    if (entry.kind !== 'file') continue
+    signal?.throwIfAborted()
+    const content = await readFileText(entry.path, maxBytes, signal)
+    files.push({ path: entry.path, relative: entry.relative, content: content.content, bytes: content.bytes })
+  }
+  return { files, truncated: index.truncated }
 }

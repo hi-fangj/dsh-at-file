@@ -2,12 +2,13 @@
  * Pure file-search ranking for the @file menu: case-insensitive subsequence
  * matching over the workspace-relative path, with basename matches ranked
  * above full-path matches and earlier match positions above later ones. The
- * empty query falls back to a shallow-first default order. Zero DOM, zero
- * cordis — the per-keystroke filter runs on the client's cached index.
+ * empty query falls back to directories first (so the picker reads as a
+ * browsable tree, not a root-file list), then files, each alphabetical. Zero
+ * DOM, zero cordis — the per-keystroke filter runs on the client's cached index.
  */
 import type { FileEntry } from './remote.ts'
 
-/** Ranked top-N files matching `query` (ties break by path length, then lexicographically). */
+/** Ranked top-N files matching `query` (ties break by kind, length, then lexicographically). */
 export function rankFiles(
   files: readonly FileEntry[],
   query: string,
@@ -15,36 +16,25 @@ export function rankFiles(
 ): readonly FileEntry[] {
   const q = query.trim().toLowerCase()
   if (q === '') {
-    return [...files].sort(byDepthThenPath).slice(0, limit)
+    return [...files].sort(byDefault).slice(0, limit)
   }
   return files
     .map(file => ({ file, score: scorePath(file.relative, q) }))
     .filter(entry => entry.score >= 0)
-    .sort(compareRank)
+    .sort((a, b) => b.score - a.score
+      || (a.file.kind === 'dir' ? 1 : 0) - (b.file.kind === 'dir' ? 1 : 0)
+      || a.file.relative.length - b.file.relative.length
+      || (a.file.relative < b.file.relative ? -1 : 1))
     .slice(0, limit)
     .map(entry => entry.file)
 }
 
-/** Rank comparison: score, then path length, then the path itself. */
-function compareRank(a: { score: number; file: FileEntry }, b: { score: number; file: FileEntry }): number {
-  const byScore = b.score - a.score
-  if (byScore !== 0) return byScore
-  const byLength = a.file.relative.length - b.file.relative.length
-  if (byLength !== 0) return byLength
-  // Relative paths are unique per index: equal score and length still differ
-  // by name, so the equal-name arm cannot be reached from ranked input.
-  /* v8 ignore next -- the equal-name arm needs two identical paths in one index. */
-  return a.file.relative < b.file.relative ? -1 : 1
-}
-
-/** Default order: fewer segments first, then the path itself. */
-function byDepthThenPath(a: FileEntry, b: FileEntry): number {
-  const depthA = a.relative.split('/').length
-  const depthB = b.relative.split('/').length
-  // Relative paths are unique per index, so the tie-break's equality arm
-  // cannot be reached from ranked input.
-  /* v8 ignore next -- unique relative paths make the equality arm unreachable. */
-  return depthA - depthB || (a.relative < b.relative ? -1 : 1)
+/** Default order: directories first (alphabetical), then files (alphabetical). */
+function byDefault(a: FileEntry, b: FileEntry): number {
+  if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1
+  // Unique relative paths make the equality arm unreachable.
+  /* v8 ignore next -- identical paths cannot both exist in one index. */
+  return a.relative < b.relative ? -1 : 1
 }
 
 /**

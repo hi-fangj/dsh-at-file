@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, symlink, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { indexWorkspace, readFileText } from '../src/files.ts'
+import { indexWorkspace, readFileText, readTree } from '../src/files.ts'
 
 /** Build a fresh fixture tree and hand back its root (caller removes it). */
 async function fixture(): Promise<string> {
@@ -28,16 +28,19 @@ async function fixture(): Promise<string> {
 }
 
 describe('indexWorkspace', () => {
-  it('collects regular files as forward-slash relative entries, sorted by path', async () => {
+  it('collects files and directories as forward-slash relative entries, sorted by path', async () => {
     const root = await fixture()
     try {
       const { files, truncated } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: ['.git', 'node_modules'] })
       expect(truncated).toBe(false)
-      expect(files.map(file => file.relative)).toEqual([
-        'README.md',
-        'data.bin',
-        'src/client/view.ts',
-        'src/index.ts',
+      expect(files.map(file => `${file.kind}:${file.relative}`)).toEqual([
+        'file:README.md',
+        'file:data.bin',
+        'dir:empty',
+        'dir:src',
+        'dir:src/client',
+        'file:src/client/view.ts',
+        'file:src/index.ts',
       ])
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -52,6 +55,7 @@ describe('indexWorkspace', () => {
       expect(relatives).toContain('src/index.ts')
       expect(relatives).toContain('src/client/view.ts')
       expect(relatives).toContain('data.bin')
+      expect(files.find(file => file.relative === 'src')?.kind).toBe('dir')
       expect(relatives.some(rel => rel.includes('node_modules'))).toBe(false)
       expect(relatives.some(rel => rel.includes('.git'))).toBe(false)
       expect(relatives.some(rel => rel.startsWith('linked-src'))).toBe(false)
@@ -182,6 +186,41 @@ describe('readFileText', () => {
       const controller = new AbortController()
       controller.abort(new Error('gone'))
       await expect(readFileText(join(root, 'README.md'), 1024, controller.signal)).rejects.toThrow('gone')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('readTree', () => {
+  it('reads every file under a directory, relative to that directory root', async () => {
+    const root = await fixture()
+    try {
+      const result = await readTree(join(root, 'src'), 100, 1024, [])
+      expect(result.truncated).toBe(false)
+      expect(result.files.map(file => file.relative)).toEqual(['client/view.ts', 'index.ts'])
+      expect(result.files.find(file => file.relative === 'index.ts')?.content).toBe('export {}\n')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses non-directory and relative paths', async () => {
+    const root = await fixture()
+    try {
+      await expect(readTree(join(root, 'README.md'), 10, 1024, [])).rejects.toThrow(/not a directory/)
+      await expect(readTree('src', 10, 1024, [])).rejects.toThrow(/not an absolute path/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reports truncation when the file cap cuts the subtree', async () => {
+    const root = await fixture()
+    try {
+      const result = await readTree(join(root, 'src'), 1, 1024, [])
+      expect(result.files).toHaveLength(1)
+      expect(result.truncated).toBe(true)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

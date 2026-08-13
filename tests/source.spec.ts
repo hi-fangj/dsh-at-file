@@ -8,29 +8,26 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { createAtFileSource, INDEX_TTL_MS, MAX_CANDIDATES, SOURCE_NAME } from '../src/client/source.ts'
-import type { FileContent, FileEntry } from '../src/client/remote.ts'
+import type { FileEntry } from '../src/client/remote.ts'
 import { en, fmt, zh, type AtFileKey } from '../src/client/locales.ts'
 
 const sid = (value: string): SessionId => value as SessionId
 const session = (id: string): ClientSessionContext => ({ sessionId: sid(id) })
 
 const FILES: readonly FileEntry[] = [
-  { path: '/ws/README.md', relative: 'README.md' },
-  { path: '/ws/src/index.ts', relative: 'src/index.ts' },
-  { path: '/ws/src/client/view.ts', relative: 'src/client/view.ts' },
+  { path: '/ws/README.md', relative: 'README.md', kind: 'file' },
+  { path: '/ws/src', relative: 'src', kind: 'dir' },
+  { path: '/ws/src/index.ts', relative: 'src/index.ts', kind: 'file' },
+  { path: '/ws/src/client/view.ts', relative: 'src/client/view.ts', kind: 'file' },
 ]
 
 function harness(overrides: Partial<ConstructorParameters<typeof createAtFileSource>[0]> = {}) {
   const search = vi.fn(async (_id: SessionId) => FILES)
-  const read = vi.fn(async (path: string): Promise<FileContent> => {
-    if (!path.startsWith('/ws/')) throw new Error(`no such file ${path}`)
-    return { content: `content of ${path}\n`, bytes: 12 }
-  })
   let clock = 0
   const t = (key: AtFileKey, params?: Record<string, string>): string =>
     fmt(zh[key] ?? en[key] ?? key, params)
-  const { source, invalidateAll } = createAtFileSource({ search, read, t, now: () => clock, ...overrides })
-  return { source, invalidateAll, search, read, tick: (ms: number) => { clock += ms } }
+  const { source, invalidateAll } = createAtFileSource({ search, t, now: () => clock, ...overrides })
+  return { source, invalidateAll, search, tick: (ms: number) => { clock += ms } }
 }
 
 describe('@file candidates', () => {
@@ -43,16 +40,22 @@ describe('@file candidates', () => {
     expect(search).toHaveBeenCalledTimes(1)
   })
 
-  it('splits the row into the relative name and its directory', async () => {
+  it('splits the row into the relative name, its directory, and the kind icon', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
-    expect(rows).toEqual([{ name: 'src/client/view.ts', description: 'src/client' }])
+    expect(rows).toEqual([{ name: 'src/client/view.ts', icon: '📄', description: 'src/client' }])
+  })
+
+  it('marks directories with a folder icon and omits a root-level description', async () => {
+    const { source } = harness()
+    const rows = await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
+    expect(rows).toContainEqual({ name: 'src', icon: '📁' })
   })
 
   it('omits the directory description for root-level files', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'README', position: 'inline', signal: new AbortController().signal })
-    expect(rows).toEqual([{ name: 'README.md' }])
+    expect(rows).toEqual([{ name: 'README.md', icon: '📄' }])
   })
 
   it('joins an in-flight fresh fetch instead of refetching', async () => {
@@ -62,8 +65,8 @@ describe('@file candidates', () => {
     const first = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     const second = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     resolveSearch(FILES)
-    await expect(first).resolves.toHaveLength(3)
-    await expect(second).resolves.toHaveLength(3)
+    await expect(first).resolves.toHaveLength(4)
+    await expect(second).resolves.toHaveLength(4)
     expect(search).toHaveBeenCalledTimes(1)
   })
 
@@ -71,6 +74,7 @@ describe('@file candidates', () => {
     const many: FileEntry[] = Array.from({ length: MAX_CANDIDATES + 5 }, (_, index) => ({
       path: `/ws/f${String(index).padStart(2, '0')}.ts`,
       relative: `f${String(index).padStart(2, '0')}.ts`,
+      kind: 'file',
     }))
     const { source } = harness({ search: vi.fn(async () => many) })
     const rows = await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
@@ -102,7 +106,7 @@ describe('@file candidates', () => {
     await expect(source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal }))
       .rejects.toThrow('down')
     const retried = await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    expect(retried).toHaveLength(3)
+    expect(retried).toHaveLength(4)
     expect(search).toHaveBeenCalledTimes(2)
   })
 
@@ -130,29 +134,35 @@ describe('@file candidates', () => {
     const second = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     resolveSecond(FILES)
     await expect(first).rejects.toThrow('down')
-    await expect(second).resolves.toHaveLength(3)
+    await expect(second).resolves.toHaveLength(4)
   })
 })
 
 describe('@file picks', () => {
-  it('lands a chip carrying the absolute ref and the @path clipboard projection', async () => {
+  it('lands the plain-text @path reference for a file', async () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
-      candidate: { name: 'src/client/view.ts', description: 'src/client' },
+      candidate: { name: 'src/client/view.ts', icon: '📄', description: 'src/client' },
       session: session('s1'),
       position: 'inline',
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
-    expect(outcome).toEqual({
-      insert: {
-        source: SOURCE_NAME,
-        ref: '/ws/src/client/view.ts',
-        label: 'src/client/view.ts',
-        clipboardText: '@src/client/view.ts',
-      },
+    expect(outcome).toEqual({ text: '@src/client/view.ts ' })
+  })
+
+  it('lands a trailing-slash @path for a directory', async () => {
+    const { source } = harness()
+    await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
+    const outcome = source.onPick({
+      candidate: { name: 'src', icon: '📁' },
+      session: session('s1'),
+      position: 'inline',
+      via: 'menu',
+      span: { start: 0, end: 1, draftRev: 4 },
     })
+    expect(outcome).toEqual({ text: '@src/ ' })
   })
 
   it('misses cleanly when the candidate no longer resolves', () => {
@@ -167,34 +177,6 @@ describe('@file picks', () => {
   })
 })
 
-describe('@file codec', () => {
-  it('serializes one ref into the path-tagged model form', async () => {
-    const { source } = harness()
-    await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    const text = await source.codec!.serialize('/ws/README.md', new AbortController().signal)
-    expect(text).toBe('<file path="README.md">\ncontent of /ws/README.md\n</file>')
-  })
-
-  it('projects clipboard text as @relative, falling back to the ref itself', async () => {
-    const { source } = harness()
-    await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    expect(source.codec!.clipboardText('/ws/README.md')).toBe('@README.md')
-    expect(source.codec!.clipboardText('/elsewhere/x.ts')).toBe('@/elsewhere/x.ts')
-  })
-
-  it('turns a failed read into a localized error (the submit blocks, never downgrades)', async () => {
-    const { source } = harness()
-    await expect(source.codec!.serialize('/missing/a.ts', new AbortController().signal))
-      .rejects.toThrow('无法读取 /missing/a.ts：no such file /missing/a.ts')
-  })
-
-  it('wraps a non-Error read failure into the same localized error', async () => {
-    const { source } = harness({ read: vi.fn(async () => { throw 'plain failure' }) })
-    await expect(source.codec!.serialize('/missing/a.ts', new AbortController().signal))
-      .rejects.toThrow('无法读取 /missing/a.ts：plain failure')
-  })
-})
-
 describe('@file lexicon and teardown', () => {
   it('serves the settled index as the @ decoration roll and notifies subscribers', async () => {
     const { source } = harness()
@@ -202,7 +184,7 @@ describe('@file lexicon and teardown', () => {
     const off = source.subscribeLexicon!(session('s1'), notified)
     expect(source.lexicon!(session('s1'))).toBeUndefined()
     await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    expect(source.lexicon!(session('s1'))).toEqual(['README.md', 'src/index.ts', 'src/client/view.ts'])
+    expect(source.lexicon!(session('s1'))).toEqual(['README.md', 'src', 'src/index.ts', 'src/client/view.ts'])
     expect(notified).toHaveBeenCalled()
     off()
     expect(notified).toHaveBeenCalledTimes(1)

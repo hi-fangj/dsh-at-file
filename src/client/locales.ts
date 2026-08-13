@@ -8,6 +8,11 @@ export const zh = {
   'dock.aria': '已附加的文件',
   'dock.remove': '移除 {name}',
   'error.read': '无法读取 {name}：{message}',
+  'nav': '文件提及',
+  'settings.title': '工作区文件提及',
+  'settings.subtitle': '在输入框输入 @ 智能搜索工作区文件，回车附加后随消息把完整内容交给模型。',
+  'settings.enabled': '启用 @ 文件提及',
+  'settings.enabledDesc': '关闭后隐藏 @ 文件选择器与附加条，模型不再收到附加文件内容。',
 } satisfies Record<string, string>
 
 /** The `at-file` namespace key union. */
@@ -18,6 +23,11 @@ export const en = {
   'dock.aria': 'Attached files',
   'dock.remove': 'Remove {name}',
   'error.read': 'Cannot read {name}: {message}',
+  'nav': 'File mentions',
+  'settings.title': 'Workspace file mentions',
+  'settings.subtitle': 'Type @ in the composer to smart-search workspace files; press Enter to attach one and ship its full content to the model.',
+  'settings.enabled': 'Enable @ file mentions',
+  'settings.enabledDesc': 'Turning this off hides the @ picker and the attached-files dock, and the model no longer receives attached file content.',
 } satisfies Record<AtFileKey, string>
 
 /** Locale namespace id registered under ctx.locale. */

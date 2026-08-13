@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Client plugin wiring over stubbed services: mounting the atFile Remote
- * contribution, registering the '@' source with the trigger pipeline, the
- * dock entry with its inject face, the locale dictionaries, the one-shot
- * stylesheet injection, and the Remote failure routing the source surfaces.
+ * contribution, registering the '@' source with the trigger pipeline and the
+ * settings gate, the dock entry with its inject face, the settings section,
+ * the locale dictionaries, and the one-shot stylesheet injection.
  */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
@@ -16,20 +16,38 @@ import { STYLE_ID } from '../src/client/styles.ts'
 
 type RemoteResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string; details: object } }
 
-interface BootOptions {
-  atFileSearch?: (sessionId: SessionId, signal: AbortSignal) => Promise<RemoteResult<readonly { path: string; relative: string }[]>>
-  atFileRead?: (path: string, signal: AbortSignal) => Promise<RemoteResult<{ content: string; bytes: number }>>
-  openPath?: () => Promise<{ result: { ok: true } | { ok: false; error: { message: string } } }>
-  /** Omit the mounted namespace service (the "mount never happened" arm). */
-  withoutNamespace?: boolean
+/** A settings scope stub with switchable value + recorded writes. */
+function scopeStub(initial: boolean) {
+  let value: { enabled: boolean } | undefined = { enabled: initial }
+  const listeners = new Set<() => void>()
+  return {
+    scope: {
+      getSnapshot: () => ({ status: value === undefined ? 'loading' : 'ready', value, revision: 0, writable: true }),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+      set: vi.fn(async (_field: string, next: boolean) => {
+        value = { enabled: next }
+        for (const listener of listeners) listener()
+      }),
+    },
+    setValue: (next: boolean) => {
+      value = { enabled: next }
+      for (const listener of listeners) listener()
+    },
+    clearValue: () => {
+      value = undefined
+      for (const listener of listeners) listener()
+    },
+  }
 }
 
-/** One registered trigger source, narrowed to the members the assertions read. */
-interface RegisteredSource {
-  trigger: string
-  name: string
-  candidates: (session: { sessionId: SessionId }, req: { query: string; position: 'leading' | 'inline'; signal: AbortSignal }) => Promise<readonly { name: string }[]>
-  codec?: { serialize: (ref: string, signal: AbortSignal) => Promise<string> }
+interface BootOptions {
+  atFileSearch?: (sessionId: SessionId, signal: AbortSignal) => Promise<RemoteResult<readonly { path: string; relative: string; kind: 'file' | 'dir' }[]>>
+  openPath?: () => Promise<{ result: { ok: true } | { ok: false; error: { message: string } } }>
+  enabled?: boolean
+  withoutNamespace?: boolean
 }
 
 /** Boot the plugin body over a stub-service context and return the recorded surfaces. */
@@ -42,17 +60,16 @@ async function boot(options: BootOptions = {}) {
   const slotsRegister = vi.fn()
   const slotsInject = vi.fn((_name: string, factory: () => void) => { factory() })
   const openPath = vi.fn(options.openPath ?? (async () => ({ result: { ok: true as const } })))
+  const { scope, setValue, clearValue } = scopeStub(options.enabled ?? true)
   ctx.provide('inputTriggers', { registerSource })
   ctx.provide('connection', { api: { host: { openPath } } })
   ctx.provide('remote', { $mount: mount })
-  // The real gateway installs the namespace as its own service; the plugin
-  // resolves it through the store (ctx.reflect.get('remote.atFile')).
   if (options.withoutNamespace !== true) {
     ctx.provide('remote.atFile', {
       search: options.atFileSearch ?? (async () => ({ ok: true as const, value: [] })),
-      read: options.atFileRead ?? (async () => ({ ok: true as const, value: { content: 'x\n', bytes: 2 } })),
     })
   }
+  ctx.provide('settingsScope', { bind: () => scope })
   ctx.provide('slots', { inject: slotsInject, register: slotsRegister })
   ctx.provide('locale', { register: localeRegister, bind })
   ctx.provide('sessions', {})
@@ -60,7 +77,14 @@ async function boot(options: BootOptions = {}) {
   // The Remote mount effect is asynchronous; settle one tick.
   await Promise.resolve()
   await Promise.resolve()
-  return { ctx, registerSource, mount, localeRegister, bind, slotsRegister, slotsInject, openPath }
+  return { ctx, registerSource, mount, localeRegister, bind, slotsRegister, slotsInject, openPath, setValue, clearValue, scope }
+}
+
+/** One registered trigger source, narrowed to the members the assertions read. */
+interface RegisteredSource {
+  trigger: string
+  name: string
+  candidates: (session: { sessionId: SessionId }, req: { query: string; position: 'leading' | 'inline'; signal: AbortSignal }) => Promise<readonly { name: string }[]>
 }
 
 /** The source the wiring registered, if any. */
@@ -74,7 +98,7 @@ const signal = () => new AbortController().signal
 
 describe('dsh-at-file client apply', () => {
   it('declares the picker and carrier services', () => {
-    expect(inject).toEqual(['inputTriggers', 'sessions', 'connection', 'remote', 'slots', 'locale'])
+    expect(inject).toEqual(['inputTriggers', 'sessions', 'connection', 'remote', 'slots', 'locale', 'settingsScope'])
   })
 
   it('mounts the atFile Remote contribution and registers the @ source', async () => {
@@ -87,7 +111,7 @@ describe('dsh-at-file client apply', () => {
   })
 
   it('routes candidate searches through the Remote namespace', async () => {
-    const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts' }] }))
+    const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts', kind: 'file' }] }))
     const booted = await boot({ atFileSearch })
     const rows = await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
     expect(rows.map(row => row.name)).toEqual(['a.ts'])
@@ -101,55 +125,108 @@ describe('dsh-at-file client apply', () => {
       .rejects.toThrow(/search failed: search-down: boom/)
   })
 
-  it('serializes a failed remote read into a localized rejection', async () => {
-    const atFileRead = vi.fn(async () => ({ ok: false as const, error: { code: 'read-down', message: 'boom', details: {} } }))
-    const booted = await boot({ atFileRead })
-    await expect(registered(booted).codec!.serialize('/ws/a.ts', signal())).rejects.toThrow('error.read')
-  })
-
-  it('serializes a successful remote read into the model form', async () => {
-    const booted = await boot()
-    const text = await registered(booted).codec!.serialize('/ws/a.ts', signal())
-    expect(text).toBe('<file path="/ws/a.ts">\nx\n</file>')
-  })
-
   it('fails loud when the namespace service never mounted', async () => {
     const booted = await boot({ withoutNamespace: true })
-    const source = registered(booted)
-    await expect(source.candidates(s1, { query: 'a', position: 'inline', signal: signal() }))
+    await expect(registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() }))
       .rejects.toThrow(/not mounted/)
-    await expect(source.codec!.serialize('/ws/a.ts', signal())).rejects.toThrow(/not mounted/)
+  })
+
+  it('does not register the source while the settings switch is off, then registers on flip', async () => {
+    const booted = await boot({ enabled: false })
+    expect(booted.registerSource).not.toHaveBeenCalled()
+    booted.setValue(true)
+    await Promise.resolve()
+    expect(booted.registerSource).toHaveBeenCalledTimes(1)
+  })
+
+  it('unregisters the source when the switch flips off after boot', async () => {
+    const booted = await boot({ enabled: true })
+    expect(booted.registerSource).toHaveBeenCalledTimes(1)
+    booted.setValue(false)
+    await Promise.resolve()
+    // A flip-off disposes the source; a flip-on re-registers (new call).
+    booted.setValue(true)
+    await Promise.resolve()
+    expect(booted.registerSource).toHaveBeenCalledTimes(2)
+  })
+
+  it('defaults to enabled before the first settings read, then follows the value', async () => {
+    const booted = await boot({ enabled: true })
+    expect(booted.registerSource).toHaveBeenCalledTimes(1)
+    // The scope clears to an unloaded state: the source stays registered
+    // (undefined value falls back to the schema default, enabled).
+    booted.clearValue()
+    await Promise.resolve()
+    expect(booted.registerSource).toHaveBeenCalledTimes(1)
   })
 
   it('registers the dock with its inject face routed to the host opener', async () => {
-    const { slotsInject, slotsRegister, openPath } = await boot()
-    expect(slotsInject).toHaveBeenCalledWith('conversation.input.dock', expect.any(Function))
-    expect(slotsRegister).toHaveBeenCalledTimes(1)
-    const registration = slotsRegister.mock.calls[0]![0] as {
-      name: string
+    const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts', kind: 'file' }] }))
+    const booted = await boot({ atFileSearch })
+    const dock = booted.slotsRegister.mock.calls.find(call => call[0]?.name === 'conversation.input.dock')?.[0] as {
       id: string
       order: number
       locale: string
-      inject: (sessionId: string) => { onOpen: (path: string) => void }
+      inject: (sessionId: string) => { onOpen: (relative: string) => void }
     }
-    expect(registration).toMatchObject({ name: 'conversation.input.dock', id: 'at-file', order: 20, locale: NS })
-    const face = registration.inject('s1')
-    face.onOpen('/ws/a.ts')
-    expect(openPath).toHaveBeenCalledWith({ path: '/ws/a.ts' })
+    expect(dock).toMatchObject({ id: 'at-file', order: 20, locale: NS })
+    // The open resolves the relative token through the index the search wrapper
+    // populates; drive one search first.
+    await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
+    dock.inject('s1').onOpen('a.ts')
+    expect(booted.openPath).toHaveBeenCalledWith({ path: '/ws/a.ts' })
   })
 
-  it('logs failed and rejecting host opens', async () => {
+  it('registers the settings section whose toggle writes the scope', async () => {
+    const { slotsRegister, scope } = await boot()
+    const section = slotsRegister.mock.calls.find(call => call[0]?.name === 'settings.section')?.[0] as {
+      id: string
+      order: number
+      label: () => string
+      locale: string
+      inject: () => { setEnabled: (enabled: boolean) => Promise<void> }
+    }
+    expect(section).toMatchObject({ id: 'at-file', order: 55, locale: NS })
+    expect(section.label()).toBe('nav')
+    await section.inject().setEnabled(false)
+    expect(scope.set).toHaveBeenCalledWith('enabled', false)
+  })
+
+  it('logs failed host opens', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      const failed = await boot({ openPath: async () => ({ result: { ok: false, error: { message: 'nope' } } }) })
-      const face = (failed.slotsRegister.mock.calls[0]![0] as { inject: (id: string) => { onOpen: (p: string) => void } }).inject('s1')
-      face.onOpen('/ws/a.ts')
+      const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts', kind: 'file' }] }))
+      const booted = await boot({ atFileSearch, openPath: async () => ({ result: { ok: false, error: { message: 'nope' } } }) })
+      await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
+      const dock = booted.slotsRegister.mock.calls.find(call => call[0]?.name === 'conversation.input.dock')?.[0] as { inject: (id: string) => { onOpen: (p: string) => void } }
+      dock.inject('s1').onOpen('a.ts')
       await Promise.resolve()
       expect(errorSpy).toHaveBeenCalledWith('[dsh-at-file] open failed:', 'nope')
-      errorSpy.mockClear()
-      const rejecting = await boot({ openPath: async () => { throw new Error('carrier down') } })
-      const rejectingFace = (rejecting.slotsRegister.mock.calls[0]![0] as { inject: (id: string) => { onOpen: (p: string) => void } }).inject('s1')
-      rejectingFace.onOpen('/ws/a.ts')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('logs an open whose token has no index entry', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const booted = await boot()
+      const dock = booted.slotsRegister.mock.calls.find(call => call[0]?.name === 'conversation.input.dock')?.[0] as { inject: (id: string) => { onOpen: (p: string) => void } }
+      dock.inject('s1').onOpen('missing.ts')
+      expect(errorSpy).toHaveBeenCalledWith('[dsh-at-file] open failed: no index entry for', 'missing.ts')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('logs a rejecting host open', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts', kind: 'file' }] }))
+      const booted = await boot({ atFileSearch, openPath: async () => { throw new Error('carrier down') } })
+      await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
+      const dock = booted.slotsRegister.mock.calls.find(call => call[0]?.name === 'conversation.input.dock')?.[0] as { inject: (id: string) => { onOpen: (p: string) => void } }
+      dock.inject('s1').onOpen('a.ts')
       await Promise.resolve()
       expect(errorSpy).toHaveBeenCalledWith('[dsh-at-file] open failed:', expect.any(Error))
     } finally {
@@ -157,25 +234,36 @@ describe('dsh-at-file client apply', () => {
     }
   })
 
-  it('disposes the mounted Remote namespace and the source registration with its fiber', async () => {
+  it('clears the index on connection reset', async () => {
+    const atFileSearch = vi.fn(async () => ({ ok: true as const, value: [{ path: '/ws/a.ts', relative: 'a.ts', kind: 'file' }] }))
+    const booted = await boot({ atFileSearch })
+    await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
+    expect(atFileSearch).toHaveBeenCalledTimes(1)
+    booted.ctx.emit('connection/reset')
+    await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
+    expect(atFileSearch).toHaveBeenCalledTimes(2)
+  })
+
+  it('disposes its registrations with the fiber', async () => {
     const ctx = new Context()
     const unmount = vi.fn(async () => {})
     const registerDispose = vi.fn()
-    const mount = vi.fn(async () => unmount)
+    const { scope } = scopeStub(true)
     ctx.provide('inputTriggers', { registerSource: vi.fn(() => registerDispose) })
     ctx.provide('connection', { api: { host: { openPath: async () => ({ result: { ok: true as const } }) } } })
-    ctx.provide('remote', { $mount: mount })
-    ctx.provide('remote.atFile', { search: async () => ({ ok: true as const, value: [] }), read: async () => ({ ok: true as const, value: { content: 'x\n', bytes: 2 } }) })
+    ctx.provide('remote', { $mount: vi.fn(async () => unmount) })
+    ctx.provide('remote.atFile', { search: async () => ({ ok: true as const, value: [] }) })
+    ctx.provide('settingsScope', { bind: () => scope })
     ctx.provide('slots', { inject: vi.fn(), register: vi.fn() })
     ctx.provide('locale', { register: vi.fn(() => () => {}), bind: vi.fn(() => (key: string) => key) })
     ctx.provide('sessions', {})
     const fiber = ctx.plugin({ inject, apply })
     await fiber
     await Promise.resolve()
-    expect(mount).toHaveBeenCalled()
+    expect(registerDispose).toHaveBeenCalledTimes(0)
     await fiber.dispose()
     expect(unmount).toHaveBeenCalled()
-    expect(registerDispose).toHaveBeenCalled()
+    expect(registerDispose).toHaveBeenCalledTimes(1)
   })
 
   it('registers the bilingual dictionaries and binds the namespace', async () => {
@@ -189,7 +277,6 @@ describe('dsh-at-file client apply', () => {
     const style = document.getElementById(STYLE_ID)
     expect(style).not.toBeNull()
     expect(style!.textContent).toContain('dsh_atFile_rail')
-    // The stable id keeps a second application (HMR re-run) idempotent.
     await boot()
     expect(document.querySelectorAll(`#${STYLE_ID}`)).toHaveLength(1)
   })

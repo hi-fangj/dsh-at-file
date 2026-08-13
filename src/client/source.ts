@@ -2,20 +2,20 @@
  * The '@' input-trigger source: turns the ui-input-trigger pipeline into the
  * Codex-style file picker. `candidates` serves the smart-searched rows (the
  * workspace index is fetched once per session and filtered locally per
- * keystroke), `onPick` lands a chip carrying the absolute path, and the
- * reference codec expands that chip into the file content at submit time —
- * so the model reads the file while the draft keeps the short `@path`
- * clipboard projection. Pure factory over injected deps: the browser bundle
- * wires the real Remote and clock, tests wire stubs.
+ * keystroke); `onPick` lands the plain-text `@path` reference — the draft
+ * keeps a readable token (no chip), and the Host's pre-step boundary expands
+ * it into the file content when the message ships (plain-text-reference
+ * decision, matching the harness's skill source). Pure factory over injected
+ * deps: the browser bundle wires the real Remote and clock, tests wire stubs.
  */
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import { modelForm, dirnameOf } from './model.ts'
+import { dirnameOf } from './model.ts'
 import { rankFiles } from './search.ts'
-import type { FileContent, FileEntry } from './remote.ts'
+import type { FileEntry } from './remote.ts'
 import type { AtFileKey } from './locales.ts'
 
-/** Owner source name (the occurrence serializer routing key and chip owner). */
+/** Owner source name (the lexicon and decoration routing key). */
 export const SOURCE_NAME = 'at-file'
 
 /** Design cap on visible picker rows (menu height mirrors the slash menu). */
@@ -38,8 +38,6 @@ interface IndexCache {
 export interface AtFileSourceDeps {
   /** Search the addressed session's workspace index (Remote wrapper). */
   search(sessionId: SessionId, signal: AbortSignal): Promise<readonly FileEntry[]>
-  /** Read one absolute path under the complete-result bounds; rejects on failure. */
-  read(path: string, signal: AbortSignal): Promise<FileContent>
   /** Localized submit-failure copy. */
   t: (key: AtFileKey, params?: Record<string, string>) => string
   /** Monotonic clock for index freshness (default Date.now). */
@@ -63,10 +61,6 @@ export interface AtFileSource {
 export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
   const now = deps.now ?? (() => Date.now())
   const fetches = new Map<SessionId, IndexCache>()
-  // Absolute → relative display map for codec-time projections (chip insert
-  // caches the same projection on the occurrence, but paste-path occurrences
-  // and serialization consult this).
-  const relativeOf = new Map<string, string>()
   const lexiconListeners = new Map<SessionId, Set<() => void>>()
 
   const notifyLexicon = (sessionId: SessionId): void => {
@@ -101,7 +95,6 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     promise.then(
       (files) => {
         entry.settled = files
-        for (const file of files) relativeOf.set(file.path, file.relative)
         notifyLexicon(sessionId)
       },
       () => {
@@ -117,7 +110,7 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     return promise
   }
 
-  const findFile = (sessionId: SessionId, relative: string): FileEntry | undefined =>
+  const findEntry = (sessionId: SessionId, relative: string): FileEntry | undefined =>
     fetches.get(sessionId)?.settled?.find(file => file.relative === relative)
 
   const invalidateAll = (): void => {
@@ -125,7 +118,6 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       fetches.delete(key)
       entry.abort.abort()
     }
-    relativeOf.clear()
     for (const listeners of [...lexiconListeners.values()]) {
       for (const listener of listeners) listener()
     }
@@ -141,6 +133,7 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
         const dir = dirnameOf(file.relative)
         return {
           name: file.relative,
+          icon: file.kind === 'dir' ? '📁' : '📄',
           ...(dir === '' ? {} : { description: dir }),
         }
       })
@@ -151,16 +144,13 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       fetchIndex(session.sessionId).catch(() => {})
     },
     onPick({ candidate, session }) {
-      const file = findFile(session.sessionId, candidate.name)
+      const file = findEntry(session.sessionId, candidate.name)
       if (file === undefined) return undefined
-      return {
-        insert: {
-          source: SOURCE_NAME,
-          ref: file.path,
-          label: file.relative,
-          clipboardText: `@${file.relative}`,
-        },
-      }
+      // Plain-text reference: the draft gains the readable @path token; the
+      // Host expands it into content at send time. A trailing slash marks a
+      // directory mention.
+      const suffix = file.kind === 'dir' ? '/' : ''
+      return { text: `@${file.relative}${suffix} ` }
     },
     lexicon(session) {
       return fetches.get(session.sessionId)?.settled?.map(file => file.relative)
@@ -174,21 +164,6 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
         listeners.delete(listener)
         if (listeners.size === 0) lexiconListeners.delete(key)
       }
-    },
-    codec: {
-      clipboardText(ref) {
-        return `@${relativeOf.get(ref) ?? ref}`
-      },
-      async serialize(ref, signal) {
-        const relative = relativeOf.get(ref) ?? ref
-        try {
-          const result = await deps.read(ref, signal)
-          return modelForm(relative, result.content)
-        } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error)
-          throw new Error(deps.t('error.read', { name: relative, message }))
-        }
-      },
     },
   }
 

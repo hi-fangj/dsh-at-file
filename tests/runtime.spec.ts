@@ -1,10 +1,10 @@
 /**
  * Host composition behavior: the plugin module boots over a real cordis
  * Context, registers the atFile service with the Gateway-visible binding, and
- * its @Remote methods answer over a fixture workspace. This is the
- * REAL-composition evidence for the host half — only the filesystem seam is
- * real, the Agent is a structural stub because the gateway's `agent` lookup
- * resolves it in the assembled host, not in this unit.
+ * its search @Remote answers over a fixture workspace. This is the
+ * REAL-composition evidence for the host half — the filesystem seam is real,
+ * the Agent and settings provider are structural stubs (the gateway's `agent`
+ * lookup resolves the live Agent in the assembled host, not in this unit).
  */
 import { Context, symbols } from '@deepseek-ai/cordis'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
@@ -13,13 +13,13 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as plugin from '../src/index.ts'
 import type { AtFileRuntime } from '../src/runtime.ts'
 
 /** One structural Agent stub: only the session header the service reads. */
 function agentWith(cwd: string | undefined): Agent {
-  return { session: { header: { cwd } } } as unknown as Agent
+  return { session: { header: { cwd } }, ctx: new Context() } as unknown as Agent
 }
 
 /** The unproxied service original (cordis caller-tracking may wrap instances). */
@@ -28,10 +28,24 @@ function originalOf(service: object): object {
   return original ?? service
 }
 
+/** A settings provider stub whose `enabled` value is switchable per test. */
+function settingsProvider(enabled: () => boolean) {
+  return {
+    register: () => ({
+      get: () => ({ enabled: enabled() }),
+      watch: () => () => {},
+      update: async () => {},
+      replace: async () => {},
+    }),
+  }
+}
+
 /** Mount the function-plugin module on a fresh context (harness test pattern). */
-async function mount(ctx: Context, config?: plugin.Config): Promise<ReturnType<Context['plugin']>> {
+async function mount(ctx: Context, config?: plugin.Config, enabled: () => boolean = () => true) {
   const registryFiber = ctx.plugin(TypertRegistry)
   await registryFiber
+  ctx.provide('settings', settingsProvider(enabled))
+  ctx.provide('agents', { roots: () => [] })
   const fiber = ctx.plugin({ inject: plugin.inject, apply: plugin.apply }, config)
   await fiber
   return fiber
@@ -48,21 +62,20 @@ describe('dsh-at-file host composition', () => {
     await fiber.dispose()
   })
 
-  it('registers the strict Typert manifest so the gateway resolves both endpoints', async () => {
+  it('registers the strict Typert manifest for the search endpoint', async () => {
     const ctx = new Context()
     const fiber = await mount(ctx)
     const registry = ctx.get('typert') as TypertRegistry
     expect(registry.local.get('atFile/search')).toMatchObject({ service: 'atFile', method: 'search' })
-    expect(registry.local.get('atFile/read')).toMatchObject({ service: 'atFile', method: 'read' })
     await fiber.dispose()
     expect(registry.local.get('atFile/search')).toBeUndefined()
   })
 
-  it('exports search and read as Remote methods in declaration order', async () => {
+  it('exports only search as a Remote method', async () => {
     const ctx = new Context()
     const fiber = await mount(ctx)
     const runtime = ctx.get('atFile') as AtFileRuntime
-    expect(remoteMethods(originalOf(runtime)).map(marker => marker.method)).toEqual(['search', 'read'])
+    expect(remoteMethods(originalOf(runtime)).map(marker => marker.method)).toEqual(['search'])
     await fiber.dispose()
   })
 
@@ -74,7 +87,7 @@ describe('dsh-at-file host composition', () => {
     expect(ctx.get('atFile')).toBeUndefined()
   })
 
-  it('search indexes the addressed workspace', async () => {
+  it('search indexes the addressed workspace, files and directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-runtime-'))
     await mkdir(join(root, 'nested'))
     await writeFile(join(root, 'a.ts'), 'a\n')
@@ -84,7 +97,11 @@ describe('dsh-at-file host composition', () => {
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
       const files = await runtime.search(agentWith(root), new AbortController().signal)
-      expect(files.map(file => file.relative)).toEqual(['a.ts', 'nested/b.ts'])
+      expect(files.map(file => `${file.kind}:${file.relative}`)).toEqual([
+        'file:a.ts',
+        'dir:nested',
+        'file:nested/b.ts',
+      ])
     } finally {
       await fiber.dispose()
       await rm(root, { recursive: true, force: true })
@@ -103,15 +120,14 @@ describe('dsh-at-file host composition', () => {
     }
   })
 
-  it('read serves a bounded text file and refuses oversized ones', async () => {
+  it('search refuses while the settings switch is off', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-runtime-'))
-    await writeFile(join(root, 'c.ts'), 'content\n')
     const ctx = new Context()
-    const fiber = await mount(ctx, { maxIndexedFiles: 10, maxFileBytes: 4, ignoreDirs: [] })
+    const fiber = await mount(ctx, undefined, () => false)
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
-      await expect(runtime.read(join(root, 'c.ts'), new AbortController().signal))
-        .rejects.toThrow(/limit is 4 bytes/)
+      await expect(runtime.search(agentWith(root), new AbortController().signal))
+        .rejects.toThrow(/disabled in Settings/)
     } finally {
       await fiber.dispose()
       await rm(root, { recursive: true, force: true })

@@ -16,9 +16,11 @@ export const inject = ['invariants']
 
 /**
  * No runtime invariant: search results are derived per call from the live
- * filesystem and the Remote registry owns the only cross-plugin registration;
- * both are proven by the composition spec's disposal assertions rather than
- * by an event-stream relationship.
+ * filesystem, the strict Typert manifest and the settings namespace are
+ * registry-owned registrations, and the pre-step mention expansion reads
+ * files and injects per-call user messages without cross-plugin mutable
+ * state. All are proven by the composition spec's disposal assertions rather
+ * than by an event-stream relationship.
  */
 const install: InvariantInstaller = () => {}
 

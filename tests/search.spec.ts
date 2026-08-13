@@ -1,19 +1,20 @@
 /**
  * Pure projection behaviors: the @file smart-search ranking and the model-form
  * / path helpers. Deterministic fixtures only — the ranking must stay stable
- * per keystroke (ties break by length, then lexicographically).
+ * per keystroke (ties break by kind, length, then lexicographically).
  */
 import { describe, expect, it } from 'vitest'
 import { rankFiles } from '../src/client/search.ts'
-import { basenameOf, dirnameOf, modelForm } from '../src/client/model.ts'
+import { basenameOf, dirnameOf } from '../src/client/model.ts'
 import type { FileEntry } from '../src/client/remote.ts'
 
-function entry(relative: string): FileEntry {
-  return { path: `/ws/${relative}`, relative }
+function entry(relative: string, kind: 'file' | 'dir' = 'file'): FileEntry {
+  return { path: `/ws/${relative}`, relative, kind }
 }
 
 const FILES: readonly FileEntry[] = [
   entry('README.md'),
+  entry('src', 'dir'),
   entry('src/index.ts'),
   entry('src/lint/check.ts'),
   entry('src/lint/run.ts'),
@@ -21,11 +22,11 @@ const FILES: readonly FileEntry[] = [
 ]
 
 describe('rankFiles', () => {
-  it('falls back to shallow-first default order on an empty query', () => {
+  it('lists directories first, then files, each alphabetical, on an empty query', () => {
     expect(rankFiles(FILES, '', 3)).toEqual([
+      entry('src', 'dir'),
       entry('README.md'),
       entry('src/index.ts'),
-      entry('tests/view.spec.ts'),
     ])
   })
 
@@ -37,7 +38,7 @@ describe('rankFiles', () => {
     ])
   })
 
-  it('ranks basename matches above directory matches', () => {
+  it('ranks basename matches above directory matches, files before directories', () => {
     expect(rankFiles(FILES, 'in', 3)).toEqual([
       entry('src/index.ts'),
       entry('src/lint/run.ts'),
@@ -60,7 +61,7 @@ describe('rankFiles', () => {
     ])
   })
 
-  it('breaks equal scores by path length, then lexicographically', () => {
+  it('breaks equal scores by length, then lexicographically', () => {
     const tied = [
       entry('deep/nested/x.ts'),
       entry('x.ts'),
@@ -76,19 +77,7 @@ describe('rankFiles', () => {
   })
 
   it('treats whitespace-only queries as empty', () => {
-    expect(rankFiles(FILES, '   ', 1)).toEqual([entry('README.md')])
-  })
-})
-
-describe('modelForm', () => {
-  it('wraps the content in a path-tagged block', () => {
-    expect(modelForm('src/index.ts', 'export {}')).toBe(
-      '<file path="src/index.ts">\nexport {}\n</file>',
-    )
-  })
-
-  it('never joins the closing tag to the content', () => {
-    expect(modelForm('a.ts', 'line\n')).toBe('<file path="a.ts">\nline\n</file>')
+    expect(rankFiles(FILES, '   ', 1)).toEqual([entry('src', 'dir')])
   })
 })
 

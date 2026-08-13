@@ -1,21 +1,8 @@
 /**
- * Pure projections shared by the @file source and its tests: the model form
- * one attached file becomes inside the outgoing prompt, and the display split
- * of a relative path into basename + directory for the picker rows.
+ * Pure display projections for the @file picker: the split of a relative path
+ * into basename + directory for the picker rows. (The model forms moved to
+ * the Host's mention expansion, which is the sole content producer now.)
  */
-
-/**
- * The prompt serialization of one attached file: a path-tagged block the
- * model reads as "this file, its content". The tag mirrors the picker's
- * workspace-relative path so the model can quote it back to the user.
- * @param relative - workspace-relative display path.
- * @param content - complete file content.
- * @returns the literal model text replacing the chip placeholder at submit.
- */
-export function modelForm(relative: string, content: string): string {
-  const body = content.endsWith('\n') ? content : `${content}\n`
-  return `<file path="${relative}">\n${body}</file>`
-}
 
 /** The directory prefix of a forward-slash relative path ('' for root-level files). */
 export function dirnameOf(relative: string): string {

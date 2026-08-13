@@ -1,4 +1,4 @@
-import type { FileContent, FileEntry } from './types.ts';
+import type { FileContent, FileEntry, ReadTreeResult } from './contract.ts';
 /** Options for one bounded index pass. */
 export interface IndexOptions {
     /** Hard cap on collected files. */
@@ -29,3 +29,14 @@ export declare function indexWorkspace(root: string, options: IndexOptions, sign
  * @throws for non-absolute paths, missing entries, directories, oversized, and binary files.
  */
 export declare function readFileText(path: string, maxBytes: number, signal?: AbortSignal): Promise<FileContent>;
+/**
+ * Read every file under one directory recursively, bounded per file and in
+ * count. The result reports `truncated` when either bound cut the tree.
+ * @param path - absolute directory path (files and missing entries are refused).
+ * @param maxFiles - hard cap on read files.
+ * @param maxBytes - per-file cap (larger files refuse the whole tree).
+ * @param ignoreDirs - directory basenames the walk skips.
+ * @param signal - caller lifetime.
+ * @returns the read files (each `relative` to the directory root) and the truncation flag.
+ */
+export declare function readTree(path: string, maxFiles: number, maxBytes: number, ignoreDirs: readonly string[], signal?: AbortSignal): Promise<ReadTreeResult>;
