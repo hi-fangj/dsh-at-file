@@ -16,7 +16,7 @@ DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框�
           <file path="README.md">…内容…</file>   ← 发送时注入
 ```
 
-选中一行会生成一个芯片引用：草稿里是占位符，输入框渲染类型图标 + basename 的蓝色文本（注入样式去掉 harness 的芯片框，宽度随名称）；发送时由插件的 codec 序列化成完整 `@路径` token，Host 在每个 agent 的 pre-step 边界把它展开成文件内容。附加目录会递归展开其下所有文件（有界）。
+选中一行会生成一个芯片引用：草稿里是占位符，输入框渲染类型图标 + basename 的蓝色文本，适配 harness 固定 64px 的占位槽——过长的 basename 显示省略号，完整名称在悬停提示和附加条里可见（注入样式去掉 harness 的芯片框）。发送时由插件的 codec 序列化成完整 `@路径` token，Host 在每个 agent 的 pre-step 边界把它展开成文件内容。附加目录会递归展开其下所有文件（有界）。
 
 ## 安装
 
