@@ -125,6 +125,28 @@ export const cssText = `
   font-size: 13px;
   line-height: 20px;
 }
+/* Composer chips (data-decoration="chip" is the harness's stable attribute):
+   the harness draws a fixed-width placeholder box per chip (the U+FFFC
+   glyph's advance drives the draft-mirror alignment, so the box must not
+   resize). The label overlay becomes the visible pill instead: auto-sized
+   to the icon + name, centered over the invisible box, so the pill length
+   matches the name while the mirror keeps aligning with the caret. */
+[data-decoration="chip"] {
+  background: transparent !important;
+}
+[data-decoration="chip"] > span {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: max-content !important;
+  max-width: none !important;
+  overflow: visible !important;
+  padding: 0 6px !important;
+  border-radius: 6px !important;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent) !important;
+  white-space: nowrap !important;
+}
 `
 
 /**

@@ -10,7 +10,7 @@ DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框�
             │ 📄 README.md               │
             │ 📁 docs/                   │
             └────────────────────────────┘
-草稿:     修复 README [README.md]   ← 芯片，只显示 basename
+草稿:     修复 README [📄 README.md]   ← 芯片，显示类型图标 + basename
 附加条:   📄 README.md  ×           ← 输入框上方可点击的文件链接
 模型:     修复 README @README.md     ← 发送时序列化为完整 @路径
           <file path="README.md">…内容…</file>   ← 发送时注入

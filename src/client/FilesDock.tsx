@@ -40,6 +40,14 @@ export function atFileOccurrences(occurrences: readonly AtFileOccurrence[]): rea
   return occurrences.filter(occurrence => occurrence.source === SOURCE_NAME)
 }
 
+/** The composer chip's leading kind-icon prefix (the pill renders it; the dock draws its own SVG icon). */
+const KIND_ICON_PREFIX = /^[📁📄]\s*/u
+
+/** The chip label without its leading kind icon (identity for foreign labels). */
+export function labelText(label: string): string {
+  return label.replace(KIND_ICON_PREFIX, '')
+}
+
 /** Draft text with one chip occurrence's placeholder (a single U+FFFC) removed. */
 export function withoutPlaceholder(draft: string, offset: number): string {
   return draft.slice(0, offset) + draft.slice(offset + 1)
@@ -79,7 +87,7 @@ export function FilesDock({ input, inputActions, onOpen, kindOf, useScope, t }: 
                   <path d="M13 4.5v8A1.5 1.5 0 0 1 11.5 14H5" fill="none" stroke="currentColor" strokeWidth="1.2" />
                 </svg>
               )}
-              {occurrence.label}
+              {labelText(occurrence.label)}
             </button>
             <button
               type="button"

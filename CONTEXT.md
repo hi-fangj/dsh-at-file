@@ -9,7 +9,7 @@ The picked file or directory, represented in the draft as a chip (placeholder + 
 _Avoid_: attachment, plain-text token
 
 **芯片 (chip)**:
-The inline placeholder rendering of a picked mention in the composer, showing only the 名称; the full path lives in the chip's ref and surfaces in the 附加条 tooltip.
+The inline placeholder rendering of a picked mention in the composer, showing the kind 图标 + the 名称 in a pill sized to the label; the full path lives in the chip's ref and surfaces in the 附加条 tooltip.
 _Avoid_: token
 
 **弹出列表 (picker)**:

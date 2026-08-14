@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactElement } from 'react'
-import { atFileOccurrences, FilesDock, withoutPlaceholder, type AtFileDockProps, type AtFileOccurrence } from '../src/client/FilesDock.tsx'
+import { atFileOccurrences, FilesDock, labelText, withoutPlaceholder, type AtFileDockProps, type AtFileOccurrence } from '../src/client/FilesDock.tsx'
 import { fmt, zh } from '../src/client/locales.ts'
 
 // jsdom + React 18 without the act harness: flushSync commits renders, and
@@ -18,12 +18,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = false
 
 const t = (key: string, params?: Record<string, string>): string => fmt(zh[key] ?? key, params)
 
-const occ = (over: Partial<AtFileOccurrence> & { occurrenceId: number; ref: string }): AtFileOccurrence => ({
-  source: 'at-file',
-  offset: 0,
-  label: over.ref.split('/').pop() as string,
-  ...over,
-})
+/** One at-file occurrence with the composer's real label shape (kind icon + basename). */
+const occ = (over: Partial<AtFileOccurrence> & { occurrenceId: number; ref: string }): AtFileOccurrence => {
+  const basename = over.ref.split('/').pop() as string
+  return { source: 'at-file', offset: 0, label: `📄 ${basename}`, ...over }
+}
 
 /** Minimal runtime stub cast onto the derived dock props. */
 function props(over: {
@@ -90,6 +89,18 @@ describe('atFileOccurrences', () => {
   })
 })
 
+describe('labelText', () => {
+  it('strips the composer chip kind icon from the label', () => {
+    expect(labelText('📄 view.ts')).toBe('view.ts')
+    expect(labelText('📁 src')).toBe('src')
+  })
+
+  it('leaves icon-less and foreign labels untouched', () => {
+    expect(labelText('view.ts')).toBe('view.ts')
+    expect(labelText('skill-name')).toBe('skill-name')
+  })
+})
+
 describe('withoutPlaceholder', () => {
   it('drops the single U+FFFC at the occurrence offset', () => {
     expect(withoutPlaceholder('a\uFFFCb\uFFFCc', 3)).toBe('a\uFFFCbc')
@@ -115,7 +126,7 @@ describe('FilesDock', () => {
   it('renders a directory occurrence with a folder icon and the path tooltip', () => {
     const { root, container } = mount(<FilesDock {...props({
       kindOf: relative => (relative === 'src' ? 'dir' : 'file'),
-      occurrences: [occ({ occurrenceId: 1, ref: 'src' }), occ({ occurrenceId: 2, ref: 'a.ts', offset: 1 })],
+      occurrences: [occ({ occurrenceId: 1, ref: 'src', label: '📁 src' }), occ({ occurrenceId: 2, ref: 'a.ts', offset: 1 })],
     })} />)
     const dirRow = container.querySelector('[data-at-file-kind="dir"]')
     expect(dirRow?.querySelector('button')?.textContent).toBe('src')

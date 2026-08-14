@@ -10,7 +10,7 @@ composer:  fix the README  @README.  ← floating picker over the token
             │ 📄 README.md               │
             │ 📁 docs/                   │
             └────────────────────────────┘
-draft:     fix the README [README.md]   ← a chip showing the basename
+draft:     fix the README [📄 README.md]  ← a chip showing the kind icon + basename
 dock:      📄 README.md  ×               ← clickable link above the input
 model:     fix the README @README.md     ← the full @path token at send time
            <file path="README.md">…content…</file>   ← injected at send time

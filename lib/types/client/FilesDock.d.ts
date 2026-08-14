@@ -34,6 +34,8 @@ export interface AtFileOccurrence {
 }
 /** The @file chip occurrences in one occurrence table, in draft order. */
 export declare function atFileOccurrences(occurrences: readonly AtFileOccurrence[]): readonly AtFileOccurrence[];
+/** The chip label without its leading kind icon (identity for foreign labels). */
+export declare function labelText(label: string): string;
 /** Draft text with one chip occurrence's placeholder (a single U+FFFC) removed. */
 export declare function withoutPlaceholder(draft: string, offset: number): string;
 /**
