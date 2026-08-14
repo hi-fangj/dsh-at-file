@@ -45,7 +45,7 @@ describe('@file candidates', () => {
   it('shows the basename first while retaining the full relative path as its value', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
-    expect(rows[0]).toMatchObject({ name: 'view.ts', value: 'src/client/view.ts', description: 'src/client' })
+    expect(rows[0]).toMatchObject({ name: 'view.ts', value: 'src/client/view.ts', description: 'src/client', title: 'src/client/view.ts' })
     expect(fileIconKind(FILES[4]!)).toBe('code')
   })
 
@@ -53,14 +53,14 @@ describe('@file candidates', () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ name: 'src', value: 'src' })
+    expect(rows[0]).toMatchObject({ name: 'src', value: 'src', title: 'src' })
     expect(rows[0]!.description).toBeUndefined()
   })
 
   it('omits the directory description for root-level files', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'README', position: 'inline', signal: new AbortController().signal })
-    expect(rows[0]).toMatchObject({ name: 'README.md', value: 'README.md' })
+    expect(rows[0]).toMatchObject({ name: 'README.md', value: 'README.md', title: 'README.md' })
     expect(rows[0]!.description).toBeUndefined()
   })
 
@@ -71,9 +71,9 @@ describe('@file candidates', () => {
     ]
     const { source } = harness({ search: vi.fn(async () => duplicates) })
     const rows = await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
-    expect(rows.map(row => ({ name: row.name, value: row.value, description: row.description }))).toEqual([
-      { name: 'view.ts - src', value: 'src/view.ts', description: 'src' },
-      { name: 'view.ts - tests', value: 'tests/view.ts', description: 'tests' },
+    expect(rows.map(row => ({ name: row.name, value: row.value, description: row.description, title: row.title }))).toEqual([
+      { name: 'view.ts - src', value: 'src/view.ts', description: 'src', title: 'src/view.ts' },
+      { name: 'view.ts - tests', value: 'tests/view.ts', description: 'tests', title: 'tests/view.ts' },
     ])
   })
 

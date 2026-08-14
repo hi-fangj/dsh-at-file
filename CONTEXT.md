@@ -25,8 +25,12 @@ The basename of the workspace-relative path — the primary text of a picker row
 _Avoid_: 文件名全称, 路径
 
 **路径 (path)**:
-The directory portion of the workspace-relative path — the dimmed secondary text of a picker row; root-level entries show `./`.
+The directory portion of the workspace-relative path — the dimmed secondary text of a picker row.
 _Avoid_: 目录
+
+**完整路径 (full path)**:
+The complete workspace-relative path of an entry: its 名称 joined to its 路径 (e.g. `src/client/source.ts`). Shown on the picker row and dock pill hover tooltip.
+_Avoid_: 相对路径, 绝对路径
 
 **目录 (directory)**:
 A workspace folder entry (kind `dir`); the picker and dock show a distinct icon for it.

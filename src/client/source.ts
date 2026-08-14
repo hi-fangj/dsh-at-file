@@ -80,6 +80,9 @@ function candidateRows(files: readonly FileEntry[]): readonly AtFileCandidate[] 
     return {
       name: duplicate && directory !== '' ? `${basename} - ${directory}` : basename,
       value: file.relative,
+      // Native hover tooltip: the full workspace-relative path, so a truncated
+      // name or a duplicate-disambiguated row reveals its complete path on hover.
+      title: file.relative,
       // The standing contract types icons as text. React renders this in-memory
       // element directly; no icon markup crosses the Host boundary.
       icon: fileIcon(file) as unknown as string,
