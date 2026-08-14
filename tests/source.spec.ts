@@ -151,7 +151,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src/client/view.ts', label: '📄 view.ts', clipboardText: '@src/client/view.ts' },
+      insert: { source: 'at-file', ref: 'src/client/view.ts', label: 'view.ts', clipboardText: '@src/client/view.ts' },
     })
   })
 
@@ -166,7 +166,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src', label: '📁 src', clipboardText: '@src' },
+      insert: { source: 'at-file', ref: 'src', label: 'src', clipboardText: '@src' },
     })
   })
 
@@ -181,7 +181,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src/client', label: '📁 client', clipboardText: '@src/client' },
+      insert: { source: 'at-file', ref: 'src/client', label: 'client', clipboardText: '@src/client' },
     })
   })
 
@@ -196,7 +196,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'README.md', label: '📄 README.md', clipboardText: '@README.md' },
+      insert: { source: 'at-file', ref: 'README.md', label: 'README.md', clipboardText: '@README.md' },
     })
   })
 

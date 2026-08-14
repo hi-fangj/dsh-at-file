@@ -128,16 +128,14 @@ export const cssText = `
 /* Composer chips (data-decoration="chip" is the harness's stable attribute):
    the placeholder slot is a fixed 64px (the U+FFFC glyph's advance in the
    DshChipCell font; the caret and the draft mirror anchor to it, so the slot
-   itself must not resize). The label overlay becomes the visible text: the
-   kind icon + the name in the brand blue at 13px, left-aligned inside the
-   invisible slot — the text starts exactly at the token position and is
-   ellipsized at the slot's right edge, so the caret always lands at (or
-   past) the visible text end and typing after the chip stays clear for any
-   basename length (the harness's own chips fit their labels inside the slot
-   the same way). The full name is one hover (the chip title) or one glance
-   at the dock away. The blue text is only reachable through the chip label
-   element (the harness's plain-text decoration regex cannot color dotted
-   filenames). */
+   itself must not resize). The label overlay becomes the visible chip: the
+   bare basename in the code font, drawn as a gray code-style pill
+   (translucent neutral fill + small radius) that starts at the token
+   position and is ellipsized at the slot's right edge — so the caret always
+   lands at (or past) the visible pill's end and typing after the chip stays
+   clear for any basename length (the harness's own chips fit their labels
+   inside the slot the same way). The full name is one hover (the chip title)
+   or one glance at the dock away. */
 [data-decoration="chip"] {
   background: transparent !important;
 }
@@ -147,15 +145,18 @@ export const cssText = `
   left: 0 !important;
   transform: translateY(-50%) !important;
   display: block !important;
+  box-sizing: border-box !important;
   width: max-content !important;
   max-width: 64px !important;
+  padding: 0 6px !important;
+  border-radius: 4px !important;
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+  color: var(--dsw-alias-label-primary) !important;
+  font-family: var(--ds-font-family-code) !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  background: transparent !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-  color: var(--dsw-alias-state-business-primary) !important;
-  font-size: 13px !important;
   white-space: nowrap !important;
 }
 `

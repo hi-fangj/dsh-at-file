@@ -157,17 +157,17 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       const relative = relativeFromRow(candidate.name, candidate.description ?? './')
       const file = findEntry(session.sessionId, relative)
       if (file === undefined) return undefined
-      // Chip reference: the draft gains one U+FFFC placeholder rendered as
-      // the kind icon + the basename in blue text (the composer chip renders
-      // the label verbatim, so the icon rides along; injected styles strip
-      // the chip box, leaving plain blue text at natural width); the codec
-      // serializes the full @path token at submit time, so the Host
-      // expansion still resolves the exact path.
+      // Chip reference: the draft gains one U+FFFC placeholder rendered as the
+      // basename alone in a monospace code tag (the composer chip renders the
+      // label verbatim; injected styles turn it into the gray code-style pill).
+      // The dock draws its own kind icon and full-path tooltip, so the composer
+      // chip stays a bare filename; the codec serializes the full @path token
+      // at submit time, so the Host expansion still resolves the exact path.
       return {
         insert: {
           source: SOURCE_NAME,
           ref: file.relative,
-          label: `${file.kind === 'dir' ? '📁' : '📄'} ${basenameOf(file.relative)}`,
+          label: basenameOf(file.relative),
           clipboardText: `@${file.relative}`,
         },
       }
