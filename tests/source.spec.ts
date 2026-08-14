@@ -140,7 +140,7 @@ describe('@file candidates', () => {
 })
 
 describe('@file picks', () => {
-  it('lands the plain-text @path reference for a file', async () => {
+  it('mints a chip reference for a file with the basename label', async () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
@@ -150,10 +150,12 @@ describe('@file picks', () => {
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
-    expect(outcome).toEqual({ text: '@src/client/view.ts ' })
+    expect(outcome).toEqual({
+      insert: { source: 'at-file', ref: 'src/client/view.ts', label: 'view.ts', clipboardText: '@src/client/view.ts' },
+    })
   })
 
-  it('lands a trailing-slash @path for a directory', async () => {
+  it('mints a chip reference for a directory', async () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
@@ -163,7 +165,9 @@ describe('@file picks', () => {
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
-    expect(outcome).toEqual({ text: '@src/ ' })
+    expect(outcome).toEqual({
+      insert: { source: 'at-file', ref: 'src', label: 'src', clipboardText: '@src' },
+    })
   })
 
   it('reconstructs a nested directory from its row texts', async () => {
@@ -176,7 +180,9 @@ describe('@file picks', () => {
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
-    expect(outcome).toEqual({ text: '@src/client/ ' })
+    expect(outcome).toEqual({
+      insert: { source: 'at-file', ref: 'src/client', label: 'client', clipboardText: '@src/client' },
+    })
   })
 
   it('reconstructs a root-level file from the ./ path text', async () => {
@@ -189,7 +195,9 @@ describe('@file picks', () => {
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
-    expect(outcome).toEqual({ text: '@README.md ' })
+    expect(outcome).toEqual({
+      insert: { source: 'at-file', ref: 'README.md', label: 'README.md', clipboardText: '@README.md' },
+    })
   })
 
   it('misses cleanly when the candidate no longer resolves', () => {
@@ -201,6 +209,31 @@ describe('@file picks', () => {
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 1 },
     })).toBeUndefined()
+  })
+})
+
+describe('@file reference codec', () => {
+  it('projects the full @path token to the clipboard', () => {
+    const { source } = harness()
+    expect(source.codec!.clipboardText('src/client/view.ts')).toBe('@src/client/view.ts')
+    expect(source.codec!.clipboardText('src')).toBe('@src')
+  })
+
+  it('serializes the exact @path token the Host scans, with a separator space', async () => {
+    const { source } = harness()
+    // The kind roll fills from the settled index (directories get the
+    // trailing-slash grammar).
+    await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
+    const codec = source.codec!
+    await expect(codec.serialize('src/client/view.ts', new AbortController().signal)).resolves.toBe('@src/client/view.ts ')
+    await expect(codec.serialize('src', new AbortController().signal)).resolves.toBe('@src/ ')
+  })
+
+  it('honors the attempt signal on serialize', async () => {
+    const { source } = harness()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(source.codec!.serialize('a.ts', controller.signal)).rejects.toThrow()
   })
 })
 

@@ -1,23 +1,27 @@
 # dsh-at-file
 
-The @file mention surface of the composer: typing @ searches the workspace index, picking a file or directory lands a plain-text `@path` token in the draft, and the Host expands that token into file content at send time. Two surfaces show these references: the 弹出列表 (picker) and the 附加条 (dock).
+The @file mention surface of the composer: typing @ searches the workspace index, picking a file or directory mints a chip reference in the draft, and at send time the chip serializes to the full `@路径` token the Host expands into file content. Two surfaces show these references: the 弹出列表 (picker) and the 附加条 (dock).
 
 ## Language
 
-**@path 引用 (mention token)**:
-The plain-text `@相对路径` token in the draft that the Host expands at its pre-step boundary; directories carry a trailing slash.
-_Avoid_: chip, attachment
+**@路径 引用 (mention)**:
+The picked file or directory, represented in the draft as a chip (placeholder + basename label) and serialized to the full `@相对路径` token the Host expands at its pre-step boundary.
+_Avoid_: attachment, plain-text token
+
+**芯片 (chip)**:
+The inline placeholder rendering of a picked mention in the composer, showing only the 名称; the full path lives in the chip's ref and surfaces in the 附加条 tooltip.
+_Avoid_: token
 
 **弹出列表 (picker)**:
 The floating candidate list opened by @ in the composer; one row per entry, each showing 图标 + 名称 + 路径.
 _Avoid_: 弹窗, menu
 
 **附加条 (dock)**:
-The strip above the composer with one pill per @path token currently in the draft; clicking a pill opens the file, × removes the token.
+The strip above the composer with one pill per 芯片 occurrence currently in the draft; clicking a pill opens the file, × removes the occurrence.
 _Avoid_: 附件条
 
 **名称 (name)**:
-The basename of the workspace-relative path — the primary text of a picker row or dock pill.
+The basename of the workspace-relative path — the primary text of a picker row, chip, or dock pill.
 _Avoid_: 文件名全称, 路径
 
 **路径 (path)**:

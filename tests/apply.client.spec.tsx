@@ -167,14 +167,18 @@ describe('dsh-at-file client apply', () => {
       id: string
       order: number
       locale: string
-      inject: (sessionId: string) => { onOpen: (relative: string) => void }
+      inject: (sessionId: string) => { onOpen: (relative: string) => void; kindOf: (relative: string) => 'file' | 'dir' | undefined }
     }
     expect(dock).toMatchObject({ id: 'at-file', order: 20, locale: NS })
     // The open resolves the relative token through the index the search wrapper
     // populates; drive one search first.
     await registered(booted).candidates(s1, { query: 'a', position: 'inline', signal: signal() })
-    dock.inject('s1').onOpen('a.ts')
+    const inject = dock.inject('s1')
+    inject.onOpen('a.ts')
     expect(booted.openPath).toHaveBeenCalledWith({ path: '/ws/a.ts' })
+    // The kind face reads the same index map (unknown refs stay undefined).
+    expect(inject.kindOf('a.ts')).toBe('file')
+    expect(inject.kindOf('missing.ts')).toBeUndefined()
   })
 
   it('registers the settings section whose toggle writes the scope', async () => {

@@ -2,11 +2,13 @@
  * The '@' input-trigger source: turns the ui-input-trigger pipeline into the
  * Codex-style file picker. `candidates` serves the smart-searched rows (the
  * workspace index is fetched once per session and filtered locally per
- * keystroke); `onPick` lands the plain-text `@path` reference — the draft
- * keeps a readable token (no chip), and the Host's pre-step boundary expands
- * it into the file content when the message ships (plain-text-reference
- * decision, matching the harness's skill source). Pure factory over injected
- * deps: the browser bundle wires the real Remote and clock, tests wire stubs.
+ * keystroke); `onPick` mints a chip reference — the draft holds one U+FFFC
+ * placeholder rendered as the basename label, and the source's codec
+ * serializes the full `@path` token when the message ships, so the Host's
+ * pre-step boundary expands the exact path (the chip form supersedes the
+ * earlier plain-text-reference decision: display clarity for the token's
+ * own text, same model form). Pure factory over injected deps: the browser
+ * bundle wires the real Remote and clock, tests wire stubs.
  */
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
@@ -62,6 +64,8 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
   const now = deps.now ?? (() => Date.now())
   const fetches = new Map<SessionId, IndexCache>()
   const lexiconListeners = new Map<SessionId, Set<() => void>>()
+  /** Global ref → kind hint roll (the codec's directory suffix); reset with the caches. */
+  const kindByRel = new Map<string, 'file' | 'dir'>()
 
   const notifyLexicon = (sessionId: SessionId): void => {
     for (const listener of [...(lexiconListeners.get(sessionId) ?? [])]) {
@@ -95,6 +99,7 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     promise.then(
       (files) => {
         entry.settled = files
+        for (const file of files) kindByRel.set(file.relative, file.kind)
         notifyLexicon(sessionId)
       },
       () => {
@@ -114,6 +119,7 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     fetches.get(sessionId)?.settled?.find(file => file.relative === relative)
 
   const invalidateAll = (): void => {
+    kindByRel.clear()
     for (const [key, entry] of [...fetches]) {
       fetches.delete(key)
       entry.abort.abort()
@@ -147,15 +153,36 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     onPick({ candidate, session }) {
       // The candidate carries display data only, so the entry lookup
       // reconstructs the relative path from the row's name + path texts
-      // (lossless: dirname + basename, './' = root, trailing slash = dir).
+      // (lossless: dirname + basename, './' = root).
       const relative = relativeFromRow(candidate.name, candidate.description ?? './')
       const file = findEntry(session.sessionId, relative)
       if (file === undefined) return undefined
-      // Plain-text reference: the draft gains the readable @path token; the
-      // Host expands it into content at send time. A trailing slash marks a
-      // directory mention.
-      const suffix = file.kind === 'dir' ? '/' : ''
-      return { text: `@${file.relative}${suffix} ` }
+      // Chip reference: the draft gains one U+FFFC placeholder rendered as
+      // the basename label; the codec serializes the full @path token at
+      // submit time, so the Host expansion still resolves the exact path.
+      return {
+        insert: {
+          source: SOURCE_NAME,
+          ref: file.relative,
+          label: basenameOf(file.relative),
+          clipboardText: `@${file.relative}`,
+        },
+      }
+    },
+    codec: {
+      // Clipboard / persistence projection: the full @path token, so a
+      // copied mention stays resolvable when pasted elsewhere.
+      clipboardText(ref) {
+        return `@${ref}`
+      },
+      // Model form: the same @path token the Host scans (directories keep
+      // the trailing-slash grammar; the trailing space keeps the token
+      // separable from what the user types after the chip).
+      async serialize(ref, signal) {
+        signal.throwIfAborted()
+        const suffix = kindByRel.get(ref) === 'dir' ? '/' : ''
+        return `@${ref}${suffix} `
+      },
     },
     lexicon(session) {
       return fetches.get(session.sessionId)?.settled?.map(file => file.relative)

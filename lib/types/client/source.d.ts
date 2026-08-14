@@ -2,11 +2,13 @@
  * The '@' input-trigger source: turns the ui-input-trigger pipeline into the
  * Codex-style file picker. `candidates` serves the smart-searched rows (the
  * workspace index is fetched once per session and filtered locally per
- * keystroke); `onPick` lands the plain-text `@path` reference — the draft
- * keeps a readable token (no chip), and the Host's pre-step boundary expands
- * it into the file content when the message ships (plain-text-reference
- * decision, matching the harness's skill source). Pure factory over injected
- * deps: the browser bundle wires the real Remote and clock, tests wire stubs.
+ * keystroke); `onPick` mints a chip reference — the draft holds one U+FFFC
+ * placeholder rendered as the basename label, and the source's codec
+ * serializes the full `@path` token when the message ships, so the Host's
+ * pre-step boundary expands the exact path (the chip form supersedes the
+ * earlier plain-text-reference decision: display clarity for the token's
+ * own text, same model form). Pure factory over injected deps: the browser
+ * bundle wires the real Remote and clock, tests wire stubs.
  */
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client';
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client';

@@ -16,9 +16,9 @@ src/invariant.ts    ./invariant companion (real `No runtime invariant:` reason)
 src/client/         browser half, served as the single file /plugins/dsh-at-file/client.js
   index.ts          apply: $mount the Remote contribution, register the @ source + dock + section + locale + styles
   remote.ts         hand-written TypertRemoteContribution + ctx.remote.atFile type merges
-  source.ts         InputTriggerSource factory (per-session index cache, plain-text @path picks)
+  source.ts         InputTriggerSource factory (per-session index cache, chip-reference picks + codec)
   search.ts         pure ranking (subsequence match, basename tier, dirs-first default)
-  FilesDock.tsx     input.dock rows parsed from the draft's @path tokens (open/remove)
+  FilesDock.tsx     input.dock rows read from the input machine's chip occurrences (open/remove)
   SettingsSection.tsx  one labeled native enable checkbox over the settings scope
 tests/              node-env specs; jsdom pragma on the browser specs
 ```
@@ -29,7 +29,8 @@ tests/              node-env specs; jsdom pragma on the browser specs
 - The Host Gateway resolves the endpoint through the **strict Typert manifest** (`src/typert.ts`, registered via `ctx.typert.register`) — never through `@Remote` marker tables, because the harness's source-launch dev environment loads the gateway from protocol `src` while a profile-loaded plugin bundle loads protocol `lib` (two marker tables). The `@Remote` decorator stays for documentation and lib-consistent deployments.
 - The descriptor set lives in `src/contract.ts` and is shared verbatim by the host manifest and the client contribution; the agent lookup codec's `typeSymbol` must stay `@deepseek-ai/dsh-session/types#SessionId`.
 - The client composes only through the standing seams (`ctx.remote.$mount`, `inputTriggers.registerSource`, `ctx.slots.register`, `ctx.locale.register`, `ctx.settingsScope.bind`). The mounted Remote namespace is resolved through `ctx.reflect.get('remote.atFile')` — NOT the dotted `ctx.remote.atFile` read, which walks the fiber chain and stops at the Loader's runtime-less forks (verified live; the store path resolves by isolation label).
-- The `@path` token grammar is `@[^\s@]+` and must stay identical between the client's dock/lexicon, the source's plain-text pick, and the Host's `scanMentions` (they are the recognition contract, not one copy).
+- The `@path` token grammar is `@[^\s@]+` and is produced in exactly two places: the source's codec (serialize/clipboardText emit it from chip refs at submit time) and the Host's `scanMentions` (which consumes it at the pre-step boundary). The client pick mints chip references (U+FFFC placeholders, basename labels) instead of writing tokens; the dock reads the input machine's occurrence table, never the raw draft. The grammar is the recognition contract, not one copy.
+- Picked entries become **chip references**, not plain-text tokens: `onPick` returns an `insert` outcome (ref = full relative path, label = basename) and the source owns a `codec` — `serialize` emits the full `@path` token (with the directory trailing slash and a separator space) that the Host expands; `clipboardText` emits the full token for copy/paste round-trips (paste-upgrade matches it against the lexicon roll).
 - The `at-file` settings namespace is exposed to the Web by a one-line entry in the harness `WEB_SETTINGS_NAMESPACES` allowlist (harness-side commit); the plugin registers it via `ctx.settings.register` and the client reads/writes it through `ctx.settingsScope.bind`.
 - The web server serves exactly one file per client plugin: keep the client bundle single-file; styles are the injected `styles.ts` string (no CSS artifacts).
 
