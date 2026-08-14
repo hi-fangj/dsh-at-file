@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { indexWorkspace, isIgnoredFileType, readFileText, readTree } from '../src/files.ts'
+import { DEFAULT_IGNORE_DIRS } from '../src/defaults.ts'
+import { GitignoreMatcher } from '../src/gitignore.ts'
 
 /** Build a fresh fixture tree and hand back its root (caller removes it). */
 async function fixture(): Promise<string> {
@@ -59,6 +61,31 @@ describe('indexWorkspace', () => {
       expect(relatives.some(rel => rel.includes('node_modules'))).toBe(false)
       expect(relatives.some(rel => rel.includes('.git'))).toBe(false)
       expect(relatives.some(rel => rel.startsWith('linked-src'))).toBe(false)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('default ignores remove common IDE metadata, caches, dependencies, and build output', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-default-ignore-'))
+    const ignored = [
+      '.idea', '.vs', '.vscode', '.settings', '.gradle', '.cxx', 'build', 'bin', 'target',
+      'cmake-build-debug', '.pytest_cache', 'DerivedData', 'node_modules',
+    ]
+    try {
+      for (const directory of ignored) {
+        await mkdir(join(root, directory), { recursive: true })
+        await writeFile(join(root, directory, 'noise.txt'), 'noise\n')
+      }
+      await mkdir(join(root, 'src'), { recursive: true })
+      await writeFile(join(root, 'src', 'main.kt'), 'fun main() {}\n')
+
+      const { files } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: DEFAULT_IGNORE_DIRS, ignoreFileExtensions: [] })
+      const relatives = files.map(file => file.relative)
+      expect(relatives).toContain('src/main.kt')
+      for (const directory of ignored) {
+        expect(relatives.some(path => path === directory || path.startsWith(`${directory}/`))).toBe(false)
+      }
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -224,7 +251,7 @@ describe('readTree', () => {
   it('reads every file under a directory, relative to that directory root', async () => {
     const root = await fixture()
     try {
-      const result = await readTree(join(root, 'src'), 100, 1024, [], [])
+      const result = await readTree(join(root, 'src'), { maxFiles: 100, maxBytes: 1024, ignoreDirs: [], ignoreFileExtensions: [] })
       expect(result.truncated).toBe(false)
       expect(result.files.map(file => file.relative)).toEqual(['client/view.ts', 'index.ts'])
       expect(result.files.find(file => file.relative === 'index.ts')?.content).toBe('export {}\n')
@@ -236,8 +263,8 @@ describe('readTree', () => {
   it('refuses non-directory and relative paths', async () => {
     const root = await fixture()
     try {
-      await expect(readTree(join(root, 'README.md'), 10, 1024, [], [])).rejects.toThrow(/not a directory/)
-      await expect(readTree('src', 10, 1024, [], [])).rejects.toThrow(/not an absolute path/)
+      await expect(readTree(join(root, 'README.md'), { maxFiles: 10, maxBytes: 1024, ignoreDirs: [], ignoreFileExtensions: [] })).rejects.toThrow(/not a directory/)
+      await expect(readTree('src', { maxFiles: 10, maxBytes: 1024, ignoreDirs: [], ignoreFileExtensions: [] })).rejects.toThrow(/not an absolute path/)
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -246,7 +273,7 @@ describe('readTree', () => {
   it('reports truncation when the file cap cuts the subtree', async () => {
     const root = await fixture()
     try {
-      const result = await readTree(join(root, 'src'), 1, 1024, [], [])
+      const result = await readTree(join(root, 'src'), { maxFiles: 1, maxBytes: 1024, ignoreDirs: [], ignoreFileExtensions: [] })
       expect(result.files).toHaveLength(1)
       expect(result.truncated).toBe(true)
     } finally {
@@ -260,7 +287,75 @@ describe('readTree', () => {
     await writeFile(join(root, 'src', 'a.ts'), 'a\n')
     await writeFile(join(root, 'src', 'b.png'), 'b\n')
     try {
-      const result = await readTree(join(root, 'src'), 100, 1024, [], ['.png'])
+      const result = await readTree(join(root, 'src'), { maxFiles: 100, maxBytes: 1024, ignoreDirs: [], ignoreFileExtensions: ['.png'] })
+      expect(result.files.map(file => file.relative)).toEqual(['a.ts'])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('gitignore integration', () => {
+  it('indexWorkspace skips entries matched by the workspace .gitignore', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-git-'))
+    await mkdir(join(root, 'dist'), { recursive: true })
+    await writeFile(join(root, '.gitignore'), 'dist/\n*.log\n')
+    await writeFile(join(root, 'a.ts'), 'a\n')
+    await writeFile(join(root, 'b.log'), 'b\n')
+    await writeFile(join(root, 'dist', 'bundle.js'), 'c\n')
+    try {
+      const gitignore = await GitignoreMatcher.load(root)
+      const { files } = await indexWorkspace(root, {
+        maxFiles: 100,
+        ignoreDirs: [],
+        ignoreFileExtensions: [],
+        gitignore,
+      })
+      expect(files.map(file => file.relative)).toEqual(['.gitignore', 'a.ts'])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('readTree skips gitignored files relative to the workspace root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-git-'))
+    await mkdir(join(root, 'src', 'generated'), { recursive: true })
+    await writeFile(join(root, '.gitignore'), 'src/generated/\n')
+    await writeFile(join(root, 'src', 'a.ts'), 'a\n')
+    await writeFile(join(root, 'src', 'generated', 'b.ts'), 'b\n')
+    try {
+      const gitignore = await GitignoreMatcher.load(root)
+      const result = await readTree(join(root, 'src'), {
+        maxFiles: 100,
+        maxBytes: 1024,
+        ignoreDirs: [],
+        ignoreFileExtensions: [],
+        gitignore,
+      })
+      expect(result.files.map(file => file.relative)).toEqual(['a.ts'])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('readTree anchors nested rules to the workspace root, not the attached directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-git-'))
+    await mkdir(join(root, 'src', 'nested'), { recursive: true })
+    await writeFile(join(root, '.gitignore'), 'nested/\n')
+    await writeFile(join(root, 'src', 'a.ts'), 'a\n')
+    await writeFile(join(root, 'src', 'nested', 'b.ts'), 'b\n')
+    try {
+      const gitignore = await GitignoreMatcher.load(root)
+      const result = await readTree(join(root, 'src'), {
+        maxFiles: 100,
+        maxBytes: 1024,
+        ignoreDirs: [],
+        ignoreFileExtensions: [],
+        gitignore,
+      })
+      // The root rule `nested/` matches any directory named nested under the
+      // workspace, including src/nested — proving the matcher walks the ancestor
+      // chain back to the workspace root rather than re-rooting at src.
       expect(result.files.map(file => file.relative)).toEqual(['a.ts'])
     } finally {
       await rm(root, { recursive: true, force: true })

@@ -138,9 +138,11 @@ describe('dsh-at-file host composition', () => {
     expect(plugin.Config({})).toEqual({
       maxIndexedFiles: 5000,
       maxFileBytes: 262144,
-      ignoreDirs: ['.git', 'node_modules'],
+      ignoreDirs: [...plugin.DEFAULT_IGNORE_DIRS],
       ignoreFileExtensions: [],
+      useGitignore: true,
     })
+    expect(plugin.Config({ ignoreDirs: [] }).ignoreDirs).toEqual([])
     expect(() => plugin.Config({ maxIndexedFiles: 0 })).toThrow()
     expect(() => plugin.Config({ maxFileBytes: 0 })).toThrow()
   })
@@ -155,11 +157,31 @@ describe('dsh-at-file host composition', () => {
       maxFileBytes: 262144,
       ignoreDirs: ['.git', 'node_modules'],
       ignoreFileExtensions: ['.png'],
+      useGitignore: false,
     })
     try {
       const runtime = ctx.get('atFile') as AtFileRuntime
       const files = await runtime.search(agentWith(root), new AbortController().signal)
       expect(files.map(file => file.relative)).toEqual(['a.ts'])
+    } finally {
+      await fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('search skips entries the workspace .gitignore ignores by default', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-runtime-'))
+    await mkdir(join(root, 'dist'))
+    await writeFile(join(root, '.gitignore'), 'dist/\n*.log\n')
+    await writeFile(join(root, 'a.ts'), 'a\n')
+    await writeFile(join(root, 'b.log'), 'b\n')
+    await writeFile(join(root, 'dist', 'bundle.js'), 'c\n')
+    const ctx = new Context()
+    const fiber = await mount(ctx)
+    try {
+      const runtime = ctx.get('atFile') as AtFileRuntime
+      const files = await runtime.search(agentWith(root), new AbortController().signal)
+      expect(files.map(file => file.relative)).toEqual(['.gitignore', 'a.ts'])
     } finally {
       await fiber.dispose()
       await rm(root, { recursive: true, force: true })

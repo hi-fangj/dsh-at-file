@@ -6,12 +6,13 @@
  * text is scanned — external text cannot forge the gesture — and every path
  * resolves against the session's workspace cwd.
  */
-import { isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import { stat } from 'node:fs/promises'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { isIgnoredFileType, readFileText, readTree } from './files.ts'
+import { GitignoreMatcher } from './gitignore.ts'
 import type { ResolvedConfig } from './types.ts'
 
 /** One recognized mention: its workspace-relative token and resolved kind. */
@@ -124,16 +125,27 @@ export async function expandMentions(
     }
   }
   const injections: UserMessage[] = []
+  const gitignore = config.useGitignore ? await GitignoreMatcher.load(cwd, signal) : null
   for (const token of tokens) {
     signal.throwIfAborted()
     const mention = await resolveMention(token, cwd, signal)
     if (mention === undefined) continue
     let form: string
     if (mention.kind === 'dir') {
-      const tree = await readTree(mention.absolute, config.maxIndexedFiles, config.maxFileBytes, config.ignoreDirs, config.ignoreFileExtensions, signal)
+      const tree = await readTree(mention.absolute, {
+        maxFiles: config.maxIndexedFiles,
+        maxBytes: config.maxFileBytes,
+        ignoreDirs: config.ignoreDirs,
+        ignoreFileExtensions: config.ignoreFileExtensions,
+        ...(gitignore === null ? {} : { gitignore }),
+      }, signal)
       form = dirForm(mention.relative, tree.files, tree.truncated)
     } else {
       if (isIgnoredFileType(mention.absolute, config.ignoreFileExtensions)) continue
+      if (gitignore !== null) {
+        const level = await gitignore.levelFor(dirname(mention.absolute), signal)
+        if (gitignore.ignores(mention.absolute, false, level)) continue
+      }
       const content = await readFileText(mention.absolute, config.maxFileBytes, signal)
       form = fileForm(mention.relative, content.content)
     }

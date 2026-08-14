@@ -2,15 +2,17 @@
  * Workspace file indexing and bounded text reads over node:fs. The index walk
  * streams directories one dirent at a time (memory stays O(one level) even
  * under a giant directory), never follows symlinked directories, skips the
- * configured ignore dirs by basename, and hard-stops at the configured file
- * cap with an honest `truncated` flag. Reads race every filesystem await
- * against the caller's signal and refuse directories, oversized, and binary
- * files instead of degrading them.
+ * configured ignore dirs by basename, consults the workspace's gitignore rules
+ * when a matcher is supplied, and hard-stops at the configured file cap with an
+ * honest `truncated` flag. Reads race every filesystem await against the
+ * caller's signal and refuse directories, oversized, and binary files instead
+ * of degrading them.
  */
 import { opendir, readFile, stat } from 'node:fs/promises'
 import type { Dir } from 'node:fs'
 import { extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { FileContent, FileEntry, ReadTreeFile, ReadTreeResult } from './contract.ts'
+import type { GitignoreLevel, GitignoreMatcher } from './gitignore.ts'
 
 /** Options for one bounded index pass. */
 export interface IndexOptions {
@@ -20,6 +22,8 @@ export interface IndexOptions {
   readonly ignoreDirs: readonly string[]
   /** File extensions the walk skips (case-insensitive, leading dot optional). */
   readonly ignoreFileExtensions: readonly string[]
+  /** Workspace gitignore matcher; when present its rules skip matching entries. */
+  readonly gitignore?: GitignoreMatcher
 }
 
 /** One index pass result: the sorted file list plus the honest truncation flag. */
@@ -115,7 +119,7 @@ function closeOrSwallow(handle: Dir, signal: AbortSignal | undefined): Promise<v
 /**
  * Collect every regular file under `root` (bounded, name-sorted).
  * @param root - workspace root to walk.
- * @param options - cap and ignore list.
+ * @param options - cap, ignore lists, and optional gitignore matcher.
  * @param signal - caller lifetime; every filesystem await races it.
  * @returns the sorted file list and the truncation flag.
  */
@@ -126,12 +130,15 @@ export async function indexWorkspace(
 ): Promise<WorkspaceIndex> {
   const ignore = new Set(options.ignoreDirs)
   const ignoreExt = new Set(options.ignoreFileExtensions.map(normalizeExtension))
+  const gitignore = options.gitignore ?? null
   const files: FileEntry[] = []
-  const queue: string[] = [root]
+  const initialLevel: GitignoreLevel | null = gitignore ? await gitignore.levelFor(root, signal) : null
+  const queue: Array<{ dir: string; level: GitignoreLevel | null }> = [{ dir: root, level: initialLevel }]
   let truncated = false
   while (queue.length > 0) {
     signal?.throwIfAborted()
-    const dir = queue.shift() as string
+    const frame = queue.shift() as { dir: string; level: GitignoreLevel | null }
+    const dir = frame.dir
     let handle: Dir
     try {
       handle = await raceAbort(opendir(dir), signal)
@@ -154,14 +161,19 @@ export async function indexWorkspace(
         const child = join(dir, dirent.name)
         if (dirent.isDirectory()) {
           if (ignore.has(dirent.name)) continue
+          if (gitignore !== null && gitignore.ignores(child, true, frame.level)) continue
           // Directories are indexed entries too, so the picker can list and
           // attach them (a directory attachment reads its files recursively).
+          // An ignored directory is skipped before its own .gitignore is read,
+          // matching git (rules inside an ignored directory never apply).
+          const level = gitignore === null ? frame.level : await gitignore.childLevel(child, frame.level, signal)
           files.push({ path: child, relative: displayRelative(root, child), kind: 'dir' })
-          queue.push(child)
+          queue.push({ dir: child, level })
           continue
         }
         if (dirent.isFile()) {
           if (extensionIgnored(dirent.name, ignoreExt)) continue
+          if (gitignore !== null && gitignore.ignores(child, false, frame.level)) continue
           files.push({ path: child, relative: displayRelative(root, child), kind: 'file' })
         }
       }
@@ -214,23 +226,23 @@ export async function readFileText(
   return { content: buffer.toString('utf8'), bytes: buffer.byteLength }
 }
 
+/** Options for one bounded directory read (a directory attachment). */
+export interface ReadTreeOptions extends IndexOptions {
+  /** Per-file cap; a larger file refuses the whole tree. */
+  readonly maxBytes: number
+}
+
 /**
  * Read every file under one directory recursively, bounded per file and in
  * count. The result reports `truncated` when either bound cut the tree.
  * @param path - absolute directory path (files and missing entries are refused).
- * @param maxFiles - hard cap on read files.
- * @param maxBytes - per-file cap (larger files refuse the whole tree).
- * @param ignoreDirs - directory basenames the walk skips.
- * @param ignoreFileExtensions - file extensions the walk skips.
+ * @param options - caps, ignore lists, and optional gitignore matcher.
  * @param signal - caller lifetime.
  * @returns the read files (each `relative` to the directory root) and the truncation flag.
  */
 export async function readTree(
   path: string,
-  maxFiles: number,
-  maxBytes: number,
-  ignoreDirs: readonly string[],
-  ignoreFileExtensions: readonly string[],
+  options: ReadTreeOptions,
   signal?: AbortSignal,
 ): Promise<ReadTreeResult> {
   if (!isAbsolute(path)) {
@@ -245,12 +257,12 @@ export async function readTree(
   if (!info.isDirectory()) {
     throw new Error(`at-file: "${path}" is not a directory`)
   }
-  const index = await indexWorkspace(path, { maxFiles, ignoreDirs, ignoreFileExtensions }, signal)
+  const index = await indexWorkspace(path, options, signal)
   const files: ReadTreeFile[] = []
   for (const entry of index.files) {
     if (entry.kind !== 'file') continue
     signal?.throwIfAborted()
-    const content = await readFileText(entry.path, maxBytes, signal)
+    const content = await readFileText(entry.path, options.maxBytes, signal)
     files.push({ path: entry.path, relative: entry.relative, content: content.content, bytes: content.bytes })
   }
   return { files, truncated: index.truncated }

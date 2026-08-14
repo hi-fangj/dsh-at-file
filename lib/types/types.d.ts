@@ -13,4 +13,6 @@ export interface ResolvedConfig {
     readonly ignoreDirs: readonly string[];
     /** File extensions the index walk skips (case-insensitive, leading dot optional). */
     readonly ignoreFileExtensions: readonly string[];
+    /** Read the workspace's own git ignore rules (root + nested .gitignore, .git/info/exclude). */
+    readonly useGitignore: boolean;
 }

@@ -10,12 +10,20 @@
  * own text, same model form). Pure factory over injected deps: the browser
  * bundle wires the real Remote and clock, tests wire stubs.
  */
-import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { InputTriggerCandidate, InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import { basenameOf, relativeFromRow, rowDescription } from './model.ts'
+import { basenameOf, dirnameOf } from './model.ts'
 import { rankFiles } from './search.ts'
+import { fileIcon } from './icons.tsx'
 import type { FileEntry } from './remote.ts'
 import type { AtFileKey } from './locales.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-input-trigger/client' {
+  interface InputTriggerCandidate {
+    /** Source-owned stable value when the visible name is only a display label. */
+    readonly value?: string
+  }
+}
 
 /** Owner source name (the lexicon and decoration routing key). */
 export const SOURCE_NAME = 'at-file'
@@ -51,6 +59,33 @@ export interface AtFileSource {
   readonly source: InputTriggerSource
   /** Drop every per-session cache and path map (connection reset). */
   invalidateAll(): void
+}
+
+/** One picker row with a stable workspace-relative value. */
+interface AtFileCandidate extends InputTriggerCandidate {
+  readonly value: string
+}
+
+/** Project ranked entries into basename-first, duplicate-safe menu rows. */
+function candidateRows(files: readonly FileEntry[]): readonly AtFileCandidate[] {
+  const counts = new Map<string, number>()
+  for (const file of files) {
+    const basename = basenameOf(file.relative)
+    counts.set(basename, (counts.get(basename) ?? 0) + 1)
+  }
+  return files.map(file => {
+    const basename = basenameOf(file.relative)
+    const directory = dirnameOf(file.relative)
+    const duplicate = (counts.get(basename) as number) > 1
+    return {
+      name: duplicate && directory !== '' ? `${basename} - ${directory}` : basename,
+      value: file.relative,
+      // The standing contract types icons as text. React renders this in-memory
+      // element directly; no icon markup crosses the Host boundary.
+      icon: fileIcon(file) as unknown as string,
+      ...(directory === '' ? {} : { description: directory }),
+    }
+  })
 }
 
 /**
@@ -135,15 +170,7 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     async candidates(session, { query, signal }) {
       const files = await fetchIndex(session.sessionId, signal)
       if (signal.aborted) return []
-      return rankFiles(files, query, MAX_CANDIDATES).map(file => ({
-        // Row projection: icon + name + path (the harness renders the name
-        // capped at 40% width, so the basename keeps the row readable and the
-        // dimmed description carries the location; the kind icon marks
-        // directories).
-        name: basenameOf(file.relative),
-        icon: file.kind === 'dir' ? '📁' : '📄',
-        description: rowDescription(file.relative),
-      }))
+      return candidateRows(rankFiles(files, query, MAX_CANDIDATES))
     },
     warm(session) {
       // Fire-and-forget scope-birth prewarm; the shared fetch reports
@@ -151,11 +178,9 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       fetchIndex(session.sessionId).catch(() => {})
     },
     onPick({ candidate, session }) {
-      // The candidate carries display data only, so the entry lookup
-      // reconstructs the relative path from the row's name + path texts
-      // (lossless: dirname + basename, './' = root).
-      const relative = relativeFromRow(candidate.name, candidate.description ?? './')
-      const file = findEntry(session.sessionId, relative)
+      // The candidate's source-owned value is the full relative path; the
+      // visible name is only a display label (disambiguated for duplicates).
+      const file = candidate.value === undefined ? undefined : findEntry(session.sessionId, candidate.value)
       if (file === undefined) return undefined
       // Chip reference: the draft gains one U+FFFC placeholder rendered as the
       // basename alone in a monospace code tag (the composer chip renders the

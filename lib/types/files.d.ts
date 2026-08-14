@@ -1,4 +1,5 @@
 import type { FileContent, FileEntry, ReadTreeResult } from './contract.ts';
+import type { GitignoreMatcher } from './gitignore.ts';
 /** Options for one bounded index pass. */
 export interface IndexOptions {
     /** Hard cap on collected files. */
@@ -7,6 +8,8 @@ export interface IndexOptions {
     readonly ignoreDirs: readonly string[];
     /** File extensions the walk skips (case-insensitive, leading dot optional). */
     readonly ignoreFileExtensions: readonly string[];
+    /** Workspace gitignore matcher; when present its rules skip matching entries. */
+    readonly gitignore?: GitignoreMatcher;
 }
 /** One index pass result: the sorted file list plus the honest truncation flag. */
 export interface WorkspaceIndex {
@@ -19,7 +22,7 @@ export declare function isIgnoredFileType(path: string, ignoreFileExtensions: re
 /**
  * Collect every regular file under `root` (bounded, name-sorted).
  * @param root - workspace root to walk.
- * @param options - cap and ignore list.
+ * @param options - cap, ignore lists, and optional gitignore matcher.
  * @param signal - caller lifetime; every filesystem await races it.
  * @returns the sorted file list and the truncation flag.
  */
@@ -33,15 +36,17 @@ export declare function indexWorkspace(root: string, options: IndexOptions, sign
  * @throws for non-absolute paths, missing entries, directories, oversized, and binary files.
  */
 export declare function readFileText(path: string, maxBytes: number, signal?: AbortSignal): Promise<FileContent>;
+/** Options for one bounded directory read (a directory attachment). */
+export interface ReadTreeOptions extends IndexOptions {
+    /** Per-file cap; a larger file refuses the whole tree. */
+    readonly maxBytes: number;
+}
 /**
  * Read every file under one directory recursively, bounded per file and in
  * count. The result reports `truncated` when either bound cut the tree.
  * @param path - absolute directory path (files and missing entries are refused).
- * @param maxFiles - hard cap on read files.
- * @param maxBytes - per-file cap (larger files refuse the whole tree).
- * @param ignoreDirs - directory basenames the walk skips.
- * @param ignoreFileExtensions - file extensions the walk skips.
+ * @param options - caps, ignore lists, and optional gitignore matcher.
  * @param signal - caller lifetime.
  * @returns the read files (each `relative` to the directory root) and the truncation flag.
  */
-export declare function readTree(path: string, maxFiles: number, maxBytes: number, ignoreDirs: readonly string[], ignoreFileExtensions: readonly string[], signal?: AbortSignal): Promise<ReadTreeResult>;
+export declare function readTree(path: string, options: ReadTreeOptions, signal?: AbortSignal): Promise<ReadTreeResult>;

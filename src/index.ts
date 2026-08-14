@@ -18,6 +18,7 @@ import { AtFileRuntime } from './runtime.ts'
 import { TYPERT_MANIFEST } from './typert.ts'
 import { registerAtFileSettings } from './settings.ts'
 import { mentionPreStep } from './mention.ts'
+import { DEFAULT_IGNORE_DIRS } from './defaults.ts'
 import type { ResolvedConfig } from './types.ts'
 
 /** Cordis plugin name (the Loader entry and client bundle id). */
@@ -25,6 +26,8 @@ export const name = 'dsh-at-file'
 
 /** Services required before load: the Typert registry, the settings provider, and the agent registry. */
 export const inject = ['typert', 'settings', 'agents']
+
+export { DEFAULT_IGNORE_DIRS } from './defaults.ts'
 
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
@@ -36,6 +39,8 @@ export interface Config {
   ignoreDirs: string[]
   /** File extensions the index walk skips (case-insensitive, leading dot optional). */
   ignoreFileExtensions: string[]
+  /** Read the workspace's own git ignore rules; manual lists layer on top. */
+  useGitignore: boolean
 }
 
 /**
@@ -47,8 +52,9 @@ export interface Config {
 export const Config = z.object({
   maxIndexedFiles: z.natural().min(1).default(5000),
   maxFileBytes: z.natural().min(1).default(256 * 1024),
-  ignoreDirs: z.array(z.string()).default(['.git', 'node_modules']),
+  ignoreDirs: z.array(z.string()).default([...DEFAULT_IGNORE_DIRS]),
   ignoreFileExtensions: z.array(z.string()).default([]),
+  useGitignore: z.boolean().default(true),
 })
 
 /**

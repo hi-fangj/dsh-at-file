@@ -12,7 +12,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { expandMentions, mentionPreStep, scanMentions } from '../src/mention.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 
-const CONFIG: ResolvedConfig = { maxIndexedFiles: 100, maxFileBytes: 1024, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [] }
+const CONFIG: ResolvedConfig = { maxIndexedFiles: 100, maxFileBytes: 1024, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [], useGitignore: false }
 
 function user(text: string): UserMessage {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -94,6 +94,52 @@ describe('expandMentions', () => {
       const config: ResolvedConfig = { ...CONFIG, ignoreFileExtensions: ['.png'] }
       const injections = await expandMentions([user('attach @photo.png')], root, config, new AbortController().signal)
       expect(injections).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('skips a directly mentioned file the workspace .gitignore ignores', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-mention-'))
+    await writeFile(join(root, '.gitignore'), 'secret.txt\n')
+    await writeFile(join(root, 'secret.txt'), 'hidden\n')
+    try {
+      const config: ResolvedConfig = { ...CONFIG, useGitignore: true }
+      const injections = await expandMentions([user('read @secret.txt')], root, config, new AbortController().signal)
+      expect(injections).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('still injects a mentioned file the .gitignore does not ignore', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-mention-'))
+    await writeFile(join(root, '.gitignore'), 'secret.txt\n')
+    await writeFile(join(root, 'a.ts'), 'a\n')
+    try {
+      const config: ResolvedConfig = { ...CONFIG, useGitignore: true }
+      const injections = await expandMentions([user('read @a.ts')], root, config, new AbortController().signal)
+      expect(injections).toHaveLength(1)
+      expect(injections[0]!.content[0]).toEqual({ type: 'text', text: '<file path="a.ts">\na\n</file>' })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('respects .gitignore when attaching a directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-mention-'))
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, '.gitignore'), 'src/generated/\n')
+    await writeFile(join(root, 'src', 'a.ts'), 'a\n')
+    await mkdir(join(root, 'src', 'generated'), { recursive: true })
+    await writeFile(join(root, 'src', 'generated', 'b.ts'), 'b\n')
+    try {
+      const config: ResolvedConfig = { ...CONFIG, useGitignore: true }
+      const injections = await expandMentions([user('attach @src/')], root, config, new AbortController().signal)
+      expect(injections[0]!.content[0]).toEqual({
+        type: 'text',
+        text: '<directory path="src">\n<file path="src/a.ts">\na\n</file>\n</directory>',
+      })
     } finally {
       await rm(root, { recursive: true, force: true })
     }

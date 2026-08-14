@@ -38,9 +38,12 @@ Host-side tunables live on the plugin row in `cordis.yml`:
   config:
     maxIndexedFiles: 5000      # hard cap on indexed entries per workspace (walk stops, reports truncation)
     maxFileBytes: 262144       # hard cap on one attached file; larger files are refused, never truncated
-    ignoreDirs: ['.git', 'node_modules']   # directory basenames the walk skips
+    useGitignore: true         # read the workspace's own .gitignore (root + nested) and .git/info/exclude
+    ignoreDirs: ['.git', 'node_modules']   # directory basenames the walk skips, layered on top of gitignore
     ignoreFileExtensions: []   # file extensions ignored everywhere (picker, directory, direct mention); case-insensitive, leading dot optional
 ```
+
+By default the plugin honors the workspace's own git ignore rules — entries ignored by `.gitignore` (root or nested) or `.git/info/exclude` never appear in the picker, a directory attachment, or a direct `@path` mention, so `node_modules`, build output, and project-local ignores need no per-project config. Set `useGitignore: false` to disable that and rely only on the manual `ignoreDirs`/`ignoreFileExtensions` lists, which always layer on top.
 
 ## Model experience
 

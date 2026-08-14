@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { indexWorkspace } from './files.ts'
+import { GitignoreMatcher } from './gitignore.ts'
 import type { FileEntry } from './contract.ts'
 import type { ResolvedConfig } from './types.ts'
 
@@ -47,10 +48,12 @@ export class AtFileRuntime extends TypertRemoteService {
     if (cwd === undefined) {
       throw new Error('at-file: the session has no workspace directory')
     }
+    const gitignore = this.config.useGitignore ? await GitignoreMatcher.load(cwd, signal) : null
     const index = await indexWorkspace(cwd, {
       maxFiles: this.config.maxIndexedFiles,
       ignoreDirs: this.config.ignoreDirs,
       ignoreFileExtensions: this.config.ignoreFileExtensions,
+      ...(gitignore === null ? {} : { gitignore }),
     }, signal)
     return index.files
   }

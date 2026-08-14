@@ -51,19 +51,19 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1-rc.1",
     "@deepseek-ai/dsh-agent": "*",
-    "@deepseek-ai/dsh-typert-protocol": "*",
-    "@deepseek-ai/dsh-client-runtime": "*",
     "@deepseek-ai/dsh-api-remotes": "*",
-    "@deepseek-ai/dsh-client-ui-input-trigger": "*",
-    "@deepseek-ai/dsh-client-ui-slots": "*",
-    "@deepseek-ai/dsh-client-ui-conversation": "*",
-    "@deepseek-ai/dsh-client-locale": "*",
     "@deepseek-ai/dsh-client-connection": "*",
-    "react": "^18.2.0",
-    "@deepseek-ai/dsh-typert-registry": "*",
-    "@deepseek-ai/dsh-settings": "*",
+    "@deepseek-ai/dsh-client-locale": "*",
+    "@deepseek-ai/dsh-client-runtime": "*",
+    "@deepseek-ai/dsh-client-ui-conversation": "*",
+    "@deepseek-ai/dsh-client-ui-input-trigger": "*",
     "@deepseek-ai/dsh-client-ui-settings": "*",
-    "@deepseek-ai/dsh-llm": "*"
+    "@deepseek-ai/dsh-client-ui-slots": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-settings": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*",
+    "@deepseek-ai/dsh-typert-registry": "*",
+    "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
@@ -113,21 +113,26 @@
     }
   },
   "dependencies": {
+    "ignore": "^7.0.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "link:../dsh/vendor/cordis",
     "@deepseek-ai/dsh-agent": "link:../dsh/packages/core/agent",
-    "@deepseek-ai/dsh-typert-protocol": "link:../dsh/packages/typert/protocol",
-    "@deepseek-ai/dsh-invariants": "link:../dsh/packages/runtime-diagnostics/invariants",
-    "@deepseek-ai/schemastery": "link:../dsh/vendor/schemastery",
-    "@deepseek-ai/dsh-client-runtime": "link:../dsh/packages/client/runtime",
     "@deepseek-ai/dsh-api-remotes": "link:../dsh/packages/api/remotes",
-    "@deepseek-ai/dsh-client-ui-input-trigger": "link:../dsh/packages/client/ui-input-trigger",
-    "@deepseek-ai/dsh-client-ui-slots": "link:../dsh/packages/client/ui-slots",
-    "@deepseek-ai/dsh-client-ui-conversation": "link:../dsh/packages/client/ui-conversation",
-    "@deepseek-ai/dsh-client-locale": "link:../dsh/packages/client/locale",
     "@deepseek-ai/dsh-client-connection": "link:../dsh/packages/client/connection",
+    "@deepseek-ai/dsh-client-locale": "link:../dsh/packages/client/locale",
+    "@deepseek-ai/dsh-client-runtime": "link:../dsh/packages/client/runtime",
+    "@deepseek-ai/dsh-client-ui-conversation": "link:../dsh/packages/client/ui-conversation",
+    "@deepseek-ai/dsh-client-ui-input-trigger": "link:../dsh/packages/client/ui-input-trigger",
+    "@deepseek-ai/dsh-client-ui-settings": "link:../dsh/packages/client/ui-settings",
+    "@deepseek-ai/dsh-client-ui-slots": "link:../dsh/packages/client/ui-slots",
+    "@deepseek-ai/dsh-invariants": "link:../dsh/packages/runtime-diagnostics/invariants",
+    "@deepseek-ai/dsh-llm": "link:../dsh/packages/llm/llm",
+    "@deepseek-ai/dsh-settings": "link:../dsh/packages/settings/settings",
+    "@deepseek-ai/dsh-typert-protocol": "link:../dsh/packages/typert/protocol",
+    "@deepseek-ai/dsh-typert-registry": "link:../dsh/packages/typert/registry",
+    "@deepseek-ai/schemastery": "link:../dsh/vendor/schemastery",
     "@types/node": "^24.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
@@ -137,10 +142,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
-    "@deepseek-ai/dsh-typert-registry": "link:../dsh/packages/typert/registry",
-    "@deepseek-ai/dsh-settings": "link:../dsh/packages/settings/settings",
-    "@deepseek-ai/dsh-client-ui-settings": "link:../dsh/packages/client/ui-settings",
-    "@deepseek-ai/dsh-llm": "link:../dsh/packages/llm/llm"
+    "vitest": "^4.1.8"
   }
 }

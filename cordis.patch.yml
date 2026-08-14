@@ -2,6 +2,11 @@
     - id: dsh-at-file
       name: dsh-at-file
       config:
-        # File extensions to ignore everywhere (picker, directory attachment,
-        # and direct @path mentions); case-insensitive, leading dot optional.
+        # Read the workspace's own git ignore rules (root + nested .gitignore,
+        # .git/info/exclude) so ignored entries stay out of the picker, directory
+        # attachment, and direct @path mentions — no per-project config needed.
+        useGitignore: true
+        # Extra file extensions to ignore everywhere (picker, directory
+        # attachment, and direct @path mentions), layered on top of gitignore;
+        # case-insensitive, leading dot optional.
         ignoreFileExtensions: []

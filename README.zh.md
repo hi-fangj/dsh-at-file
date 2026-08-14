@@ -38,9 +38,12 @@ Host 侧可调参数在 `cordis.yml` 的插件行上：
   config:
     maxIndexedFiles: 5000      # 每个工作区索引条目数上限（到达即停止遍历并如实报告截断）
     maxFileBytes: 262144       # 单个附加文件字节上限；超限文件拒绝附加，绝不截断
-    ignoreDirs: ['.git', 'node_modules']   # 遍历时跳过的目录名
+    useGitignore: true         # 读取工作区自身的 .gitignore（根目录 + 嵌套）与 .git/info/exclude
+    ignoreDirs: ['.git', 'node_modules']   # 遍历时跳过的目录名，叠加在 gitignore 之上
     ignoreFileExtensions: []   # 全局忽略的文件扩展名（选择器、目录附加、直接 @ 提及均生效）；不区分大小写，前导点可省略
 ```
+
+默认情况下插件会遵守工作区自身的 git 忽略规则——被 `.gitignore`（根目录或嵌套）或 `.git/info/exclude` 忽略的条目不会出现在选择器、目录附加或直接 `@路径` 提及中，因此 `node_modules`、构建产物和项目本地忽略项无需逐个配置。设置 `useGitignore: false` 可关闭该行为，仅依赖手动 `ignoreDirs`/`ignoreFileExtensions`（这两份列表始终叠加生效）。
 
 ## 对模型的影响
 

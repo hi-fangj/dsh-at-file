@@ -13,6 +13,7 @@ import z from '@deepseek-ai/schemastery';
 export declare const name = "dsh-at-file";
 /** Services required before load: the Typert registry, the settings provider, and the agent registry. */
 export declare const inject: string[];
+export { DEFAULT_IGNORE_DIRS } from './defaults.ts';
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
     /** Hard cap on indexed files per workspace; the walk stops and reports truncation. */
@@ -23,6 +24,8 @@ export interface Config {
     ignoreDirs: string[];
     /** File extensions the index walk skips (case-insensitive, leading dot optional). */
     ignoreFileExtensions: string[];
+    /** Read the workspace's own git ignore rules; manual lists layer on top. */
+    useGitignore: boolean;
 }
 /**
  * Configuration schema: deployment-varying bounds stay tunable from
@@ -35,11 +38,13 @@ export declare const Config: z<Schemastery.ObjectS<{
     maxFileBytes: z<number, number>;
     ignoreDirs: z<string[], string[]>;
     ignoreFileExtensions: z<string[], string[]>;
+    useGitignore: z<boolean, boolean>;
 }>, Schemastery.ObjectT<{
     maxIndexedFiles: z<number, number>;
     maxFileBytes: z<number, number>;
     ignoreDirs: z<string[], string[]>;
     ignoreFileExtensions: z<string[], string[]>;
+    useGitignore: z<boolean, boolean>;
 }>>;
 /**
  * Mount the atFile service and the pre-step mention expansion.
