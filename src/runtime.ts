@@ -50,6 +50,7 @@ export class AtFileRuntime extends TypertRemoteService {
     const index = await indexWorkspace(cwd, {
       maxFiles: this.config.maxIndexedFiles,
       ignoreDirs: this.config.ignoreDirs,
+      ignoreFileExtensions: this.config.ignoreFileExtensions,
     }, signal)
     return index.files
   }

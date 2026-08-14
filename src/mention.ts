@@ -11,7 +11,7 @@ import { stat } from 'node:fs/promises'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { readFileText, readTree } from './files.ts'
+import { isIgnoredFileType, readFileText, readTree } from './files.ts'
 import type { ResolvedConfig } from './types.ts'
 
 /** One recognized mention: its workspace-relative token and resolved kind. */
@@ -130,9 +130,10 @@ export async function expandMentions(
     if (mention === undefined) continue
     let form: string
     if (mention.kind === 'dir') {
-      const tree = await readTree(mention.absolute, config.maxIndexedFiles, config.maxFileBytes, config.ignoreDirs, signal)
+      const tree = await readTree(mention.absolute, config.maxIndexedFiles, config.maxFileBytes, config.ignoreDirs, config.ignoreFileExtensions, signal)
       form = dirForm(mention.relative, tree.files, tree.truncated)
     } else {
+      if (isIgnoredFileType(mention.absolute, config.ignoreFileExtensions)) continue
       const content = await readFileText(mention.absolute, config.maxFileBytes, signal)
       form = fileForm(mention.relative, content.content)
     }

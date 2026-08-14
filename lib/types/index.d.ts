@@ -21,6 +21,8 @@ export interface Config {
     maxFileBytes: number;
     /** Directory basenames the index walk skips entirely. */
     ignoreDirs: string[];
+    /** File extensions the index walk skips (case-insensitive, leading dot optional). */
+    ignoreFileExtensions: string[];
 }
 /**
  * Configuration schema: deployment-varying bounds stay tunable from
@@ -32,10 +34,12 @@ export declare const Config: z<Schemastery.ObjectS<{
     maxIndexedFiles: z<number, number>;
     maxFileBytes: z<number, number>;
     ignoreDirs: z<string[], string[]>;
+    ignoreFileExtensions: z<string[], string[]>;
 }>, Schemastery.ObjectT<{
     maxIndexedFiles: z<number, number>;
     maxFileBytes: z<number, number>;
     ignoreDirs: z<string[], string[]>;
+    ignoreFileExtensions: z<string[], string[]>;
 }>>;
 /**
  * Mount the atFile service and the pre-step mention expansion.

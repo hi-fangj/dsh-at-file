@@ -12,7 +12,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { expandMentions, mentionPreStep, scanMentions } from '../src/mention.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 
-const CONFIG: ResolvedConfig = { maxIndexedFiles: 100, maxFileBytes: 1024, ignoreDirs: ['.git', 'node_modules'] }
+const CONFIG: ResolvedConfig = { maxIndexedFiles: 100, maxFileBytes: 1024, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [] }
 
 function user(text: string): UserMessage {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -82,6 +82,18 @@ describe('expandMentions', () => {
         source: { kind: 'user' },
       })
       expect(await expandMentions([message], root, CONFIG, new AbortController().signal)).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('skips a directly mentioned file whose extension is ignored', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-mention-'))
+    await writeFile(join(root, 'photo.png'), 'png\n')
+    try {
+      const config: ResolvedConfig = { ...CONFIG, ignoreFileExtensions: ['.png'] }
+      const injections = await expandMentions([user('attach @photo.png')], root, config, new AbortController().signal)
+      expect(injections).toEqual([])
     } finally {
       await rm(root, { recursive: true, force: true })
     }

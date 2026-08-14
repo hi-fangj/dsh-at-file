@@ -39,6 +39,7 @@ Host 侧可调参数在 `cordis.yml` 的插件行上：
     maxIndexedFiles: 5000      # 每个工作区索引条目数上限（到达即停止遍历并如实报告截断）
     maxFileBytes: 262144       # 单个附加文件字节上限；超限文件拒绝附加，绝不截断
     ignoreDirs: ['.git', 'node_modules']   # 遍历时跳过的目录名
+    ignoreFileExtensions: []   # 全局忽略的文件扩展名（选择器、目录附加、直接 @ 提及均生效）；不区分大小写，前导点可省略
 ```
 
 ## 对模型的影响

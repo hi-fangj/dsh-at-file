@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, symlink, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { indexWorkspace, readFileText, readTree } from '../src/files.ts'
+import { indexWorkspace, isIgnoredFileType, readFileText, readTree } from '../src/files.ts'
 
 /** Build a fresh fixture tree and hand back its root (caller removes it). */
 async function fixture(): Promise<string> {
@@ -31,7 +31,7 @@ describe('indexWorkspace', () => {
   it('collects files and directories as forward-slash relative entries, sorted by path', async () => {
     const root = await fixture()
     try {
-      const { files, truncated } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: ['.git', 'node_modules'] })
+      const { files, truncated } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [] })
       expect(truncated).toBe(false)
       expect(files.map(file => `${file.kind}:${file.relative}`)).toEqual([
         'file:README.md',
@@ -50,7 +50,7 @@ describe('indexWorkspace', () => {
   it('skips ignore dirs and symlinked directories, includes every remaining file', async () => {
     const root = await fixture()
     try {
-      const { files } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: ['.git', 'node_modules'] })
+      const { files } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [] })
       const relatives = files.map(file => file.relative)
       expect(relatives).toContain('src/index.ts')
       expect(relatives).toContain('src/client/view.ts')
@@ -67,7 +67,7 @@ describe('indexWorkspace', () => {
   it('carries the absolute path on every entry', async () => {
     const root = await fixture()
     try {
-      const { files } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: [] })
+      const { files } = await indexWorkspace(root, { maxFiles: 100, ignoreDirs: [], ignoreFileExtensions: [] })
       const readme = files.find(file => file.relative === 'README.md')
       expect(readme?.path).toBe(join(root, 'README.md'))
     } finally {
@@ -78,7 +78,7 @@ describe('indexWorkspace', () => {
   it('stops at the file cap and reports truncation honestly', async () => {
     const root = await fixture()
     try {
-      const { files, truncated } = await indexWorkspace(root, { maxFiles: 2, ignoreDirs: ['.git', 'node_modules'] })
+      const { files, truncated } = await indexWorkspace(root, { maxFiles: 2, ignoreDirs: ['.git', 'node_modules'], ignoreFileExtensions: [] })
       expect(files).toHaveLength(2)
       expect(truncated).toBe(true)
     } finally {
@@ -89,7 +89,7 @@ describe('indexWorkspace', () => {
   it('rejects a missing root with a readable error', async () => {
     await expect(indexWorkspace(
       join(tmpdir(), 'dsh-at-file-missing-root'),
-      { maxFiles: 10, ignoreDirs: [] },
+      { maxFiles: 10, ignoreDirs: [], ignoreFileExtensions: [] },
       new AbortController().signal,
     )).rejects.toThrow(/cannot list/)
   })
@@ -99,7 +99,7 @@ describe('indexWorkspace', () => {
     try {
       const controller = new AbortController()
       controller.abort(new Error('gone'))
-      await expect(indexWorkspace(root, { maxFiles: 10, ignoreDirs: [] }, controller.signal))
+      await expect(indexWorkspace(root, { maxFiles: 10, ignoreDirs: [], ignoreFileExtensions: [] }, controller.signal))
         .rejects.toThrow('gone')
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -111,7 +111,7 @@ describe('indexWorkspace', () => {
     try {
       const controller = new AbortController()
       controller.abort('plain reason')
-      await expect(indexWorkspace(root, { maxFiles: 10, ignoreDirs: [] }, controller.signal))
+      await expect(indexWorkspace(root, { maxFiles: 10, ignoreDirs: [], ignoreFileExtensions: [] }, controller.signal))
         .rejects.toThrow('plain reason')
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -124,11 +124,39 @@ describe('indexWorkspace', () => {
     const { execFileSync } = await import('node:child_process')
     execFileSync('mkfifo', [join(root, 'pipe')])
     try {
-      const { files } = await indexWorkspace(root, { maxFiles: 10, ignoreDirs: [] })
+      const { files } = await indexWorkspace(root, { maxFiles: 10, ignoreDirs: [], ignoreFileExtensions: [] })
       expect(files).toEqual([])
     } finally {
       await rm(root, { recursive: true, force: true })
     }
+  })
+
+  it('skips files whose extension is ignored (case-insensitive, dot-optional) and keeps extension-less files', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-ext-'))
+    await writeFile(join(root, 'keep.ts'), 'keep\n')
+    await writeFile(join(root, 'skip.png'), 'skip\n')
+    await writeFile(join(root, 'photo.JPG'), 'jpg\n')
+    await writeFile(join(root, 'README'), 'no extension\n')
+    try {
+      const { files } = await indexWorkspace(root, {
+        maxFiles: 10,
+        ignoreDirs: [],
+        ignoreFileExtensions: ['.png', 'jpg'],
+      })
+      expect(files.map(file => file.relative)).toEqual(['README', 'keep.ts'])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('isIgnoredFileType', () => {
+  it('matches by extension case-insensitively and tolerates a missing leading dot', () => {
+    expect(isIgnoredFileType('a/b.png', ['.png'])).toBe(true)
+    expect(isIgnoredFileType('a/b.PNG', ['png'])).toBe(true)
+    expect(isIgnoredFileType('a/b.ts', ['.png'])).toBe(false)
+    expect(isIgnoredFileType('a/README', ['.png'])).toBe(false)
+    expect(isIgnoredFileType('a/b.png', [])).toBe(false)
   })
 })
 
@@ -196,7 +224,7 @@ describe('readTree', () => {
   it('reads every file under a directory, relative to that directory root', async () => {
     const root = await fixture()
     try {
-      const result = await readTree(join(root, 'src'), 100, 1024, [])
+      const result = await readTree(join(root, 'src'), 100, 1024, [], [])
       expect(result.truncated).toBe(false)
       expect(result.files.map(file => file.relative)).toEqual(['client/view.ts', 'index.ts'])
       expect(result.files.find(file => file.relative === 'index.ts')?.content).toBe('export {}\n')
@@ -208,8 +236,8 @@ describe('readTree', () => {
   it('refuses non-directory and relative paths', async () => {
     const root = await fixture()
     try {
-      await expect(readTree(join(root, 'README.md'), 10, 1024, [])).rejects.toThrow(/not a directory/)
-      await expect(readTree('src', 10, 1024, [])).rejects.toThrow(/not an absolute path/)
+      await expect(readTree(join(root, 'README.md'), 10, 1024, [], [])).rejects.toThrow(/not a directory/)
+      await expect(readTree('src', 10, 1024, [], [])).rejects.toThrow(/not an absolute path/)
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -218,9 +246,22 @@ describe('readTree', () => {
   it('reports truncation when the file cap cuts the subtree', async () => {
     const root = await fixture()
     try {
-      const result = await readTree(join(root, 'src'), 1, 1024, [])
+      const result = await readTree(join(root, 'src'), 1, 1024, [], [])
       expect(result.files).toHaveLength(1)
       expect(result.truncated).toBe(true)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('skips ignored extensions when reading a directory tree', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-tree-ext-'))
+    await mkdir(join(root, 'src'))
+    await writeFile(join(root, 'src', 'a.ts'), 'a\n')
+    await writeFile(join(root, 'src', 'b.png'), 'b\n')
+    try {
+      const result = await readTree(join(root, 'src'), 100, 1024, [], ['.png'])
+      expect(result.files.map(file => file.relative)).toEqual(['a.ts'])
     } finally {
       await rm(root, { recursive: true, force: true })
     }

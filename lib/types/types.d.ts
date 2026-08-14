@@ -11,4 +11,6 @@ export interface ResolvedConfig {
     readonly maxFileBytes: number;
     /** Directory basenames the index walk skips entirely. */
     readonly ignoreDirs: readonly string[];
+    /** File extensions the index walk skips (case-insensitive, leading dot optional). */
+    readonly ignoreFileExtensions: readonly string[];
 }

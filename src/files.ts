@@ -9,7 +9,7 @@
  */
 import { opendir, readFile, stat } from 'node:fs/promises'
 import type { Dir } from 'node:fs'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { FileContent, FileEntry, ReadTreeFile, ReadTreeResult } from './contract.ts'
 
 /** Options for one bounded index pass. */
@@ -18,6 +18,8 @@ export interface IndexOptions {
   readonly maxFiles: number
   /** Directory basenames the walk skips (children never enqueue). */
   readonly ignoreDirs: readonly string[]
+  /** File extensions the walk skips (case-insensitive, leading dot optional). */
+  readonly ignoreFileExtensions: readonly string[]
 }
 
 /** One index pass result: the sorted file list plus the honest truncation flag. */
@@ -29,6 +31,24 @@ export interface WorkspaceIndex {
 
 /** First bytes probed for NUL to classify a file as binary. */
 const BINARY_PROBE_BYTES = 8192
+
+/** Normalize one configured extension to its lowercase dotted form. */
+function normalizeExtension(extension: string): string {
+  const lower = extension.toLowerCase()
+  return lower.startsWith('.') ? lower : `.${lower}`
+}
+
+/** True when `name`'s file extension sits in the ignored set. */
+function extensionIgnored(name: string, ignore: ReadonlySet<string>): boolean {
+  if (ignore.size === 0) return false
+  const ext = extname(name).toLowerCase()
+  return ext !== '' && ignore.has(ext)
+}
+
+/** True when `path`'s extension is in the ignored list (case-insensitive; the leading dot is optional). */
+export function isIgnoredFileType(path: string, ignoreFileExtensions: readonly string[]): boolean {
+  return extensionIgnored(path, new Set(ignoreFileExtensions.map(normalizeExtension)))
+}
 
 /** Await `operation`, rejecting with the signal's reason the moment it aborts. */
 function raceAbort<T>(operation: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
@@ -105,6 +125,7 @@ export async function indexWorkspace(
   signal?: AbortSignal,
 ): Promise<WorkspaceIndex> {
   const ignore = new Set(options.ignoreDirs)
+  const ignoreExt = new Set(options.ignoreFileExtensions.map(normalizeExtension))
   const files: FileEntry[] = []
   const queue: string[] = [root]
   let truncated = false
@@ -139,7 +160,10 @@ export async function indexWorkspace(
           queue.push(child)
           continue
         }
-        if (dirent.isFile()) files.push({ path: child, relative: displayRelative(root, child), kind: 'file' })
+        if (dirent.isFile()) {
+          if (extensionIgnored(dirent.name, ignoreExt)) continue
+          files.push({ path: child, relative: displayRelative(root, child), kind: 'file' })
+        }
       }
     } finally {
       await closeOrSwallow(handle, signal)
@@ -197,6 +221,7 @@ export async function readFileText(
  * @param maxFiles - hard cap on read files.
  * @param maxBytes - per-file cap (larger files refuse the whole tree).
  * @param ignoreDirs - directory basenames the walk skips.
+ * @param ignoreFileExtensions - file extensions the walk skips.
  * @param signal - caller lifetime.
  * @returns the read files (each `relative` to the directory root) and the truncation flag.
  */
@@ -205,6 +230,7 @@ export async function readTree(
   maxFiles: number,
   maxBytes: number,
   ignoreDirs: readonly string[],
+  ignoreFileExtensions: readonly string[],
   signal?: AbortSignal,
 ): Promise<ReadTreeResult> {
   if (!isAbsolute(path)) {
@@ -219,7 +245,7 @@ export async function readTree(
   if (!info.isDirectory()) {
     throw new Error(`at-file: "${path}" is not a directory`)
   }
-  const index = await indexWorkspace(path, { maxFiles, ignoreDirs }, signal)
+  const index = await indexWorkspace(path, { maxFiles, ignoreDirs, ignoreFileExtensions }, signal)
   const files: ReadTreeFile[] = []
   for (const entry of index.files) {
     if (entry.kind !== 'file') continue

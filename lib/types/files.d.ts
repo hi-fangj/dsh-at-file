@@ -5,6 +5,8 @@ export interface IndexOptions {
     readonly maxFiles: number;
     /** Directory basenames the walk skips (children never enqueue). */
     readonly ignoreDirs: readonly string[];
+    /** File extensions the walk skips (case-insensitive, leading dot optional). */
+    readonly ignoreFileExtensions: readonly string[];
 }
 /** One index pass result: the sorted file list plus the honest truncation flag. */
 export interface WorkspaceIndex {
@@ -12,6 +14,8 @@ export interface WorkspaceIndex {
     /** True when the walk hit `maxFiles` before the tree was exhausted. */
     readonly truncated: boolean;
 }
+/** True when `path`'s extension is in the ignored list (case-insensitive; the leading dot is optional). */
+export declare function isIgnoredFileType(path: string, ignoreFileExtensions: readonly string[]): boolean;
 /**
  * Collect every regular file under `root` (bounded, name-sorted).
  * @param root - workspace root to walk.
@@ -36,7 +40,8 @@ export declare function readFileText(path: string, maxBytes: number, signal?: Ab
  * @param maxFiles - hard cap on read files.
  * @param maxBytes - per-file cap (larger files refuse the whole tree).
  * @param ignoreDirs - directory basenames the walk skips.
+ * @param ignoreFileExtensions - file extensions the walk skips.
  * @param signal - caller lifetime.
  * @returns the read files (each `relative` to the directory root) and the truncation flag.
  */
-export declare function readTree(path: string, maxFiles: number, maxBytes: number, ignoreDirs: readonly string[], signal?: AbortSignal): Promise<ReadTreeResult>;
+export declare function readTree(path: string, maxFiles: number, maxBytes: number, ignoreDirs: readonly string[], ignoreFileExtensions: readonly string[], signal?: AbortSignal): Promise<ReadTreeResult>;

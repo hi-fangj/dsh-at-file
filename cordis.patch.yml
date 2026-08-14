@@ -1,3 +1,7 @@
 - insert:
     - id: dsh-at-file
       name: dsh-at-file
+      config:
+        # File extensions to ignore everywhere (picker, directory attachment,
+        # and direct @path mentions); case-insensitive, leading dot optional.
+        ignoreFileExtensions: []

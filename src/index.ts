@@ -34,6 +34,8 @@ export interface Config {
   maxFileBytes: number
   /** Directory basenames the index walk skips entirely. */
   ignoreDirs: string[]
+  /** File extensions the index walk skips (case-insensitive, leading dot optional). */
+  ignoreFileExtensions: string[]
 }
 
 /**
@@ -46,6 +48,7 @@ export const Config = z.object({
   maxIndexedFiles: z.natural().min(1).default(5000),
   maxFileBytes: z.natural().min(1).default(256 * 1024),
   ignoreDirs: z.array(z.string()).default(['.git', 'node_modules']),
+  ignoreFileExtensions: z.array(z.string()).default([]),
 })
 
 /**

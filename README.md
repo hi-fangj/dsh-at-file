@@ -39,6 +39,7 @@ Host-side tunables live on the plugin row in `cordis.yml`:
     maxIndexedFiles: 5000      # hard cap on indexed entries per workspace (walk stops, reports truncation)
     maxFileBytes: 262144       # hard cap on one attached file; larger files are refused, never truncated
     ignoreDirs: ['.git', 'node_modules']   # directory basenames the walk skips
+    ignoreFileExtensions: []   # file extensions ignored everywhere (picker, directory, direct mention); case-insensitive, leading dot optional
 ```
 
 ## Model experience

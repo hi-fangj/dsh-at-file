@@ -139,8 +139,30 @@ describe('dsh-at-file host composition', () => {
       maxIndexedFiles: 5000,
       maxFileBytes: 262144,
       ignoreDirs: ['.git', 'node_modules'],
+      ignoreFileExtensions: [],
     })
     expect(() => plugin.Config({ maxIndexedFiles: 0 })).toThrow()
     expect(() => plugin.Config({ maxFileBytes: 0 })).toThrow()
+  })
+
+  it('search skips files whose extension is configured to ignore', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-at-file-runtime-'))
+    await writeFile(join(root, 'a.ts'), 'a\n')
+    await writeFile(join(root, 'b.png'), 'b\n')
+    const ctx = new Context()
+    const fiber = await mount(ctx, {
+      maxIndexedFiles: 5000,
+      maxFileBytes: 262144,
+      ignoreDirs: ['.git', 'node_modules'],
+      ignoreFileExtensions: ['.png'],
+    })
+    try {
+      const runtime = ctx.get('atFile') as AtFileRuntime
+      const files = await runtime.search(agentWith(root), new AbortController().signal)
+      expect(files.map(file => file.relative)).toEqual(['a.ts'])
+    } finally {
+      await fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })
