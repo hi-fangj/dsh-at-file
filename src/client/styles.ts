@@ -126,13 +126,16 @@ export const cssText = `
   line-height: 20px;
 }
 /* Composer chips (data-decoration="chip" is the harness's stable attribute):
-   the harness draws a fixed-width placeholder box per chip (the U+FFFC
-   glyph's advance drives the draft-mirror alignment, so the invisible box
-   must not resize). The label overlay becomes the visible text instead: the
-   kind icon + the name in the brand blue, natural width — no chip box, no
-   pill background. The blue text is only reachable through the chip label
-   element (the harness's plain-text decoration regex cannot color dotted
-   filenames). */
+   the placeholder slot is a fixed 64px (the U+FFFC glyph's advance in the
+   DshChipCell font; the caret and the draft mirror anchor to it, so the slot
+   itself must not resize). The label overlay becomes the visible text: the
+   kind icon + the name in the brand blue at 13px, centered in the invisible
+   slot — common basenames (view.ts, README.md) fit inside the slot, so the
+   text sits at the token position, the caret lands right at its end, and
+   typing after the chip stays clear; longer names overflow the slot
+   symmetrically by a few pixels. The blue text is only reachable through
+   the chip label element (the harness's plain-text decoration regex cannot
+   color dotted filenames). */
 [data-decoration="chip"] {
   background: transparent !important;
 }
@@ -148,6 +151,7 @@ export const cssText = `
   padding: 0 !important;
   border-radius: 0 !important;
   color: var(--dsw-alias-state-business-primary) !important;
+  font-size: 13px !important;
   white-space: nowrap !important;
 }
 `
