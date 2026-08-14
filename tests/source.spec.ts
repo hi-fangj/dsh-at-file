@@ -168,7 +168,7 @@ describe('@file candidates', () => {
 })
 
 describe('@file picks', () => {
-  it('mints a chip reference for a file with the basename label', async () => {
+  it('mints a chip reference for a file with the @basename label', async () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
@@ -179,7 +179,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src/client/view.ts', label: 'view.ts', clipboardText: '@src/client/view.ts' },
+      insert: { source: 'at-file', ref: 'src/client/view.ts', label: '@view.ts', clipboardText: '@src/client/view.ts' },
     })
   })
 
@@ -194,7 +194,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src', label: 'src', clipboardText: '@src' },
+      insert: { source: 'at-file', ref: 'src', label: '@src', clipboardText: '@src' },
     })
   })
 
@@ -209,7 +209,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'src/client', label: 'client', clipboardText: '@src/client' },
+      insert: { source: 'at-file', ref: 'src/client', label: '@client', clipboardText: '@src/client' },
     })
   })
 
@@ -224,7 +224,7 @@ describe('@file picks', () => {
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({
-      insert: { source: 'at-file', ref: 'README.md', label: 'README.md', clipboardText: '@README.md' },
+      insert: { source: 'at-file', ref: 'README.md', label: '@README.md', clipboardText: '@README.md' },
     })
   })
 
