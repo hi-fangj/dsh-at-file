@@ -12,10 +12,19 @@ export const STYLE_ID = 'dsh-at-file-style'
 /** The dock's injected stylesheet text. */
 export const cssText = `
 .dsh_atFile_rail {
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+  /* Align the pill strip with the input card it sits above: the card is the
+     centered (card-max-width) capsule inset by the shared side clearance, so
+     the strip reuses that exact geometry — first pill on the card's left edge,
+     strip clipped to the card's right edge, at every viewport width. The
+     custom properties inherit from the conversation root (ui-conversation). */
+  width: calc(100% - 2 * var(--dsh-composer-side-clearance));
+  max-width: var(--dsh-composer-card-max-width);
+  margin: 0 auto;
 }
 .dsh_atFile_row {
   display: inline-flex;
