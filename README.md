@@ -21,7 +21,7 @@ Picking a row mints a chip reference: the draft holds a placeholder rendered as 
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/hi-fangj/dsh-at-file/archive/refs/heads/main.tar.gz
 ```
 
 Restart the web server so the host half and the served client bundle pick up the plugin. The plugin needs the standard web bundle composition (the `ui-input-trigger` `@` pipeline, `api-gateway` client Remote, and the conversation slots) — the default `dsh web` profile has all of them.
@@ -48,7 +48,7 @@ Host-side tunables live on the plugin row in `cordis.yml`:
 | Token cost | One attached file adds its complete content (up to `maxFileBytes`) to the request; a directory adds each subtree file. |
 | Tool calls | None — the content is already in the prompt; the model never calls a tool to read attached files. |
 | Message format | Each file serializes as `<file path="<workspace-relative>">\n<content>\n</file>`; a directory as `<directory path="…">…</directory>`; injected as a user-role message with source `at-file-mention`. |
-| Limits | Files over `maxFileBytes`, binary files, or paths escaping the workspace are skipped (the mention stays plain prose). |
+| Limits | Files over `maxFileBytes` and binary files are refused (the read fails rather than degrading the content); paths that escape the workspace or no longer resolve are skipped (the mention stays plain prose). |
 
 ## Permission boundary
 

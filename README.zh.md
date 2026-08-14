@@ -21,7 +21,7 @@ DeepSeek Harness Web GUI 的 Codex 风格 `@` 文件提及插件。在输入框�
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/heads/main.tar.gz
+dsh plugin --profile web add https://github.com/hi-fangj/dsh-at-file/archive/refs/heads/main.tar.gz
 ```
 
 随后重启 web 服务以加载 host 半部分与新的 client bundle。插件依赖标准 web bundle 组合（`ui-input-trigger` 的 `@` 管线、`api-gateway` client Remote、会话插槽），默认的 `dsh web` profile 均已包含。
@@ -48,7 +48,7 @@ Host 侧可调参数在 `cordis.yml` 的插件行上：
 | Token 开销 | 每个附加文件把完整内容（不超过 `maxFileBytes`）加入请求；目录则逐个加入其下文件。 |
 | 工具调用 | 无 —— 内容已在提示词中，模型无需再调用工具读取。 |
 | 消息格式 | 文件序列化为 `<file path="<工作区相对路径>">\n<内容>\n</file>`，目录为 `<directory path="…">…</directory>`；以来源 `at-file-mention` 的用户消息注入。 |
-| 边界 | 超过 `maxFileBytes`、二进制文件、或越出工作区的路径被跳过（提及保持普通文本）。 |
+| 边界 | 超过 `maxFileBytes` 或二进制文件会被拒绝（读取失败而非降级）；越出工作区或已不存在的路径被跳过（提及保持普通文本）。 |
 
 ## 权限边界
 
