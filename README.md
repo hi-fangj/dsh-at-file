@@ -10,13 +10,13 @@ composer:  fix the README  @README.  ← floating picker over the token
             │ 📄 README.md               │
             │ 📁 docs/                   │
             └────────────────────────────┘
-draft:     fix the README [📄 README.md]  ← a chip showing the kind icon + basename
+draft:     fix the README 📄 README.md    ← kind icon + basename in blue text (no chip box)
 dock:      📄 README.md  ×               ← clickable link above the input
 model:     fix the README @README.md     ← the full @path token at send time
            <file path="README.md">…content…</file>   ← injected at send time
 ```
 
-Picking a row mints a chip: the draft holds a placeholder rendered as the basename (no long path overflow), and at send time the source's codec serializes the full `@path` token, which the Host expands into the file content at each agent's pre-step boundary. Attaching a directory expands to every file under it, recursively and bounded.
+Picking a row mints a chip reference: the draft holds a placeholder rendered as the kind icon + the basename in blue text at natural width (injected styles strip the harness's chip box), and at send time the source's codec serializes the full `@path` token, which the Host expands into the file content at each agent's pre-step boundary. Attaching a directory expands to every file under it, recursively and bounded.
 
 ## Install
 

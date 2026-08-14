@@ -127,10 +127,12 @@ export const cssText = `
 }
 /* Composer chips (data-decoration="chip" is the harness's stable attribute):
    the harness draws a fixed-width placeholder box per chip (the U+FFFC
-   glyph's advance drives the draft-mirror alignment, so the box must not
-   resize). The label overlay becomes the visible pill instead: auto-sized
-   to the icon + name, centered over the invisible box, so the pill length
-   matches the name while the mirror keeps aligning with the caret. */
+   glyph's advance drives the draft-mirror alignment, so the invisible box
+   must not resize). The label overlay becomes the visible text instead: the
+   kind icon + the name in the brand blue, natural width — no chip box, no
+   pill background. The blue text is only reachable through the chip label
+   element (the harness's plain-text decoration regex cannot color dotted
+   filenames). */
 [data-decoration="chip"] {
   background: transparent !important;
 }
@@ -142,9 +144,10 @@ export const cssText = `
   width: max-content !important;
   max-width: none !important;
   overflow: visible !important;
-  padding: 0 6px !important;
-  border-radius: 6px !important;
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent) !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: var(--dsw-alias-state-business-primary) !important;
   white-space: nowrap !important;
 }
 `

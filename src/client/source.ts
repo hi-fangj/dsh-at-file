@@ -158,8 +158,9 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       const file = findEntry(session.sessionId, relative)
       if (file === undefined) return undefined
       // Chip reference: the draft gains one U+FFFC placeholder rendered as
-      // a pill showing the kind icon + the basename label (the composer chip
-      // renders the label verbatim, so the icon rides along); the codec
+      // the kind icon + the basename in blue text (the composer chip renders
+      // the label verbatim, so the icon rides along; injected styles strip
+      // the chip box, leaving plain blue text at natural width); the codec
       // serializes the full @path token at submit time, so the Host
       // expansion still resolves the exact path.
       return {
