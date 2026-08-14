@@ -5,7 +5,9 @@
  * file on the host, the × removes the token from the draft. The draft holds
  * plain-text @path tokens (the plain-text-reference decision), so the dock
  * parses them directly; the settings scope's live enable value gates the
- * strip.
+ * strip. Each pill shows the kind icon (folder for directory tokens, whose
+ * grammar carries a trailing slash) + the basename, with the full relative
+ * path on the title tooltip.
  */
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client';
@@ -24,6 +26,8 @@ interface DraftMention {
     readonly relative: string;
     readonly start: number;
     readonly end: number;
+    /** Token-shape directory marker: the raw token ends with '/' (the same grammar the picker and the Host use). */
+    readonly dir: boolean;
 }
 /** Parse the draft's @path tokens in order, deduplicating by relative path. */
 export declare function draftMentions(draft: string): readonly DraftMention[];

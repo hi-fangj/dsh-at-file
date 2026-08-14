@@ -17,6 +17,7 @@ const session = (id: string): ClientSessionContext => ({ sessionId: sid(id) })
 const FILES: readonly FileEntry[] = [
   { path: '/ws/README.md', relative: 'README.md', kind: 'file' },
   { path: '/ws/src', relative: 'src', kind: 'dir' },
+  { path: '/ws/src/client', relative: 'src/client', kind: 'dir' },
   { path: '/ws/src/index.ts', relative: 'src/index.ts', kind: 'file' },
   { path: '/ws/src/client/view.ts', relative: 'src/client/view.ts', kind: 'file' },
 ]
@@ -34,28 +35,28 @@ describe('@file candidates', () => {
   it('fetches the session index once and filters per keystroke locally', async () => {
     const { source, search } = harness()
     const first = await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
-    expect(first.map(item => item.name)).toEqual(['src/client/view.ts'])
+    expect(first.map(item => item.name)).toEqual(['view.ts'])
     const second = await source.candidates(session('s1'), { query: 'README', position: 'inline', signal: new AbortController().signal })
     expect(second.map(item => item.name)).toEqual(['README.md'])
     expect(search).toHaveBeenCalledTimes(1)
   })
 
-  it('splits the row into the relative name, its directory, and the kind icon', async () => {
+  it('projects each row as the basename name, its directory path, and the kind icon', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
-    expect(rows).toEqual([{ name: 'src/client/view.ts', icon: '📄', description: 'src/client' }])
+    expect(rows).toEqual([{ name: 'view.ts', icon: '📄', description: 'src/client' }])
   })
 
-  it('marks directories with a folder icon and omits a root-level description', async () => {
+  it('marks directories with a folder icon and the root path text', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
-    expect(rows).toContainEqual({ name: 'src', icon: '📁' })
+    expect(rows).toContainEqual({ name: 'src', icon: '📁', description: './' })
   })
 
-  it('omits the directory description for root-level files', async () => {
+  it('gives root-level files the ./ path text', async () => {
     const { source } = harness()
     const rows = await source.candidates(session('s1'), { query: 'README', position: 'inline', signal: new AbortController().signal })
-    expect(rows).toEqual([{ name: 'README.md', icon: '📄' }])
+    expect(rows).toEqual([{ name: 'README.md', icon: '📄', description: './' }])
   })
 
   it('joins an in-flight fresh fetch instead of refetching', async () => {
@@ -65,8 +66,8 @@ describe('@file candidates', () => {
     const first = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     const second = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     resolveSearch(FILES)
-    await expect(first).resolves.toHaveLength(4)
-    await expect(second).resolves.toHaveLength(4)
+    await expect(first).resolves.toHaveLength(5)
+    await expect(second).resolves.toHaveLength(5)
     expect(search).toHaveBeenCalledTimes(1)
   })
 
@@ -106,7 +107,7 @@ describe('@file candidates', () => {
     await expect(source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal }))
       .rejects.toThrow('down')
     const retried = await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    expect(retried).toHaveLength(4)
+    expect(retried).toHaveLength(5)
     expect(search).toHaveBeenCalledTimes(2)
   })
 
@@ -134,7 +135,7 @@ describe('@file candidates', () => {
     const second = source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
     resolveSecond(FILES)
     await expect(first).rejects.toThrow('down')
-    await expect(second).resolves.toHaveLength(4)
+    await expect(second).resolves.toHaveLength(5)
   })
 })
 
@@ -143,7 +144,7 @@ describe('@file picks', () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'view', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
-      candidate: { name: 'src/client/view.ts', icon: '📄', description: 'src/client' },
+      candidate: { name: 'view.ts', icon: '📄', description: 'src/client' },
       session: session('s1'),
       position: 'inline',
       via: 'menu',
@@ -156,13 +157,39 @@ describe('@file picks', () => {
     const { source } = harness()
     await source.candidates(session('s1'), { query: 'src', position: 'inline', signal: new AbortController().signal })
     const outcome = source.onPick({
-      candidate: { name: 'src', icon: '📁' },
+      candidate: { name: 'src', icon: '📁', description: './' },
       session: session('s1'),
       position: 'inline',
       via: 'menu',
       span: { start: 0, end: 1, draftRev: 4 },
     })
     expect(outcome).toEqual({ text: '@src/ ' })
+  })
+
+  it('reconstructs a nested directory from its row texts', async () => {
+    const { source } = harness()
+    await source.candidates(session('s1'), { query: 'client', position: 'inline', signal: new AbortController().signal })
+    const outcome = source.onPick({
+      candidate: { name: 'client', icon: '📁', description: 'src' },
+      session: session('s1'),
+      position: 'inline',
+      via: 'menu',
+      span: { start: 0, end: 1, draftRev: 4 },
+    })
+    expect(outcome).toEqual({ text: '@src/client/ ' })
+  })
+
+  it('reconstructs a root-level file from the ./ path text', async () => {
+    const { source } = harness()
+    await source.candidates(session('s1'), { query: 'README', position: 'inline', signal: new AbortController().signal })
+    const outcome = source.onPick({
+      candidate: { name: 'README.md', icon: '📄', description: './' },
+      session: session('s1'),
+      position: 'inline',
+      via: 'menu',
+      span: { start: 0, end: 1, draftRev: 4 },
+    })
+    expect(outcome).toEqual({ text: '@README.md ' })
   })
 
   it('misses cleanly when the candidate no longer resolves', () => {
@@ -184,7 +211,7 @@ describe('@file lexicon and teardown', () => {
     const off = source.subscribeLexicon!(session('s1'), notified)
     expect(source.lexicon!(session('s1'))).toBeUndefined()
     await source.candidates(session('s1'), { query: '', position: 'leading', signal: new AbortController().signal })
-    expect(source.lexicon!(session('s1'))).toEqual(['README.md', 'src', 'src/index.ts', 'src/client/view.ts'])
+    expect(source.lexicon!(session('s1'))).toEqual(['README.md', 'src', 'src/client', 'src/index.ts', 'src/client/view.ts'])
     expect(notified).toHaveBeenCalled()
     off()
     expect(notified).toHaveBeenCalledTimes(1)

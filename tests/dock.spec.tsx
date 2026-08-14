@@ -62,15 +62,15 @@ function click(element: Element | null): void {
 }
 
 describe('draftMentions', () => {
-  it('parses @path tokens with their spans, stripping the directory slash', () => {
+  it('parses @path tokens with their spans, marking directories by their slash', () => {
     expect(draftMentions('a @x.ts and @dir/ end')).toEqual([
-      { relative: 'x.ts', start: 2, end: 7 },
-      { relative: 'dir', start: 12, end: 17 },
+      { relative: 'x.ts', start: 2, end: 7, dir: false },
+      { relative: 'dir', start: 12, end: 17, dir: true },
     ])
   })
 
   it('deduplicates repeated tokens', () => {
-    expect(draftMentions('@a.ts @a.ts')).toEqual([{ relative: 'a.ts', start: 0, end: 5 }])
+    expect(draftMentions('@a.ts @a.ts')).toEqual([{ relative: 'a.ts', start: 0, end: 5, dir: false }])
   })
 
   it('computes the token-free draft', () => {
@@ -79,11 +79,25 @@ describe('draftMentions', () => {
 })
 
 describe('FilesDock', () => {
-  it('renders one row per @path token in the draft', () => {
+  it('renders one row per @path token with the basename label and the full path tooltip', () => {
     const { root, container } = mount(<FilesDock {...props({ draft: '@a.ts and @src/b.ts' })} />)
     expect(container.querySelectorAll('[data-at-file-row]')).toHaveLength(2)
     expect(container.textContent).toContain('a.ts')
-    expect(container.textContent).toContain('src/b.ts')
+    expect(container.textContent).toContain('b.ts')
+    expect(container.querySelector('[title="a.ts"]')).not.toBeNull()
+    const nested = container.querySelector('[title="src/b.ts"]')
+    expect(nested).not.toBeNull()
+    expect(nested?.textContent).toBe('b.ts')
+    root.unmount()
+  })
+
+  it('renders a directory token with a folder icon and the path tooltip', () => {
+    const { root, container } = mount(<FilesDock {...props({ draft: 'see @src/ and @a.ts' })} />)
+    const dirRow = container.querySelector('[data-at-file-kind="dir"]')
+    expect(dirRow?.querySelector('button')?.textContent).toBe('src')
+    expect(dirRow?.querySelector('button')?.getAttribute('title')).toBe('src')
+    const fileRow = container.querySelector('[data-at-file-kind="file"]')
+    expect(fileRow?.querySelector('button')?.textContent).toBe('a.ts')
     root.unmount()
   })
 

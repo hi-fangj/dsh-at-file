@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { rankFiles } from '../src/client/search.ts'
-import { basenameOf, dirnameOf } from '../src/client/model.ts'
+import { basenameOf, dirnameOf, relativeFromRow, rowDescription } from '../src/client/model.ts'
 import type { FileEntry } from '../src/client/remote.ts'
 
 function entry(relative: string, kind: 'file' | 'dir' = 'file'): FileEntry {
@@ -90,5 +90,18 @@ describe('path projections', () => {
   it('treats root-level files as directory-less', () => {
     expect(basenameOf('README.md')).toBe('README.md')
     expect(dirnameOf('README.md')).toBe('')
+  })
+
+  it('projects the picker row name and path texts', () => {
+    expect(rowDescription('src/client/view.ts')).toBe('src/client')
+    expect(rowDescription('README.md')).toBe('./')
+    expect(rowDescription('src')).toBe('./')
+  })
+
+  it('reconstructs the relative path from a row losslessly', () => {
+    expect(relativeFromRow('view.ts', 'src/client')).toBe('src/client/view.ts')
+    expect(relativeFromRow('components/', 'src')).toBe('src/components')
+    expect(relativeFromRow('README.md', './')).toBe('README.md')
+    expect(relativeFromRow('src/', './')).toBe('src')
   })
 })

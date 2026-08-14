@@ -10,7 +10,7 @@
  */
 import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
-import { dirnameOf } from './model.ts'
+import { basenameOf, relativeFromRow, rowDescription } from './model.ts'
 import { rankFiles } from './search.ts'
 import type { FileEntry } from './remote.ts'
 import type { AtFileKey } from './locales.ts'
@@ -129,14 +129,15 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
     async candidates(session, { query, signal }) {
       const files = await fetchIndex(session.sessionId, signal)
       if (signal.aborted) return []
-      return rankFiles(files, query, MAX_CANDIDATES).map(file => {
-        const dir = dirnameOf(file.relative)
-        return {
-          name: file.relative,
-          icon: file.kind === 'dir' ? '📁' : '📄',
-          ...(dir === '' ? {} : { description: dir }),
-        }
-      })
+      return rankFiles(files, query, MAX_CANDIDATES).map(file => ({
+        // Row projection: icon + name + path (the harness renders the name
+        // capped at 40% width, so the basename keeps the row readable and the
+        // dimmed description carries the location; the kind icon marks
+        // directories).
+        name: basenameOf(file.relative),
+        icon: file.kind === 'dir' ? '📁' : '📄',
+        description: rowDescription(file.relative),
+      }))
     },
     warm(session) {
       // Fire-and-forget scope-birth prewarm; the shared fetch reports
@@ -144,7 +145,11 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       fetchIndex(session.sessionId).catch(() => {})
     },
     onPick({ candidate, session }) {
-      const file = findEntry(session.sessionId, candidate.name)
+      // The candidate carries display data only, so the entry lookup
+      // reconstructs the relative path from the row's name + path texts
+      // (lossless: dirname + basename, './' = root, trailing slash = dir).
+      const relative = relativeFromRow(candidate.name, candidate.description ?? './')
+      const file = findEntry(session.sessionId, relative)
       if (file === undefined) return undefined
       // Plain-text reference: the draft gains the readable @path token; the
       // Host expands it into content at send time. A trailing slash marks a
