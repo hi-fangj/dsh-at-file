@@ -186,16 +186,16 @@ export function createAtFileSource(deps: AtFileSourceDeps): AtFileSource {
       const file = candidate.value === undefined ? undefined : findEntry(session.sessionId, candidate.value)
       if (file === undefined) return undefined
       // Chip reference: the draft gains one U+FFFC placeholder rendered as the
-      // @basename label (the composer chip renders the label verbatim; injected
-      // styles turn it into a blue code-style pill). The dock draws its own
-      // kind icon and full-path tooltip; the codec serializes the full @path
-      // token at submit time, so the Host expansion still resolves the exact
-      // path even though the input shows only the mention form.
+      // basename alone in a monospace code tag (the composer chip renders the
+      // label verbatim; injected styles turn it into the gray code-style pill).
+      // The dock draws its own kind icon and full-path tooltip, so the composer
+      // chip stays a bare filename; the codec serializes the full @path token
+      // at submit time, so the Host expansion still resolves the exact path.
       return {
         insert: {
           source: SOURCE_NAME,
           ref: file.relative,
-          label: `@${basenameOf(file.relative)}`,
+          label: basenameOf(file.relative),
           clipboardText: `@${file.relative}`,
         },
       }

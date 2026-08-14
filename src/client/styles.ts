@@ -138,7 +138,7 @@ export const cssText = `
    the placeholder slot is a fixed 64px (the U+FFFC glyph's advance in the
    DshChipCell font; the caret and the draft mirror anchor to it, so the slot
    itself must not resize). The label overlay becomes the visible chip: the
-   @basename in the code font, drawn as a blue code-style pill
+   bare basename in the code font, drawn as a gray code-style pill
    (translucent neutral fill + small radius) that starts at the token
    position and is ellipsized at the slot's right edge — so the caret always
    lands at (or past) the visible pill's end and typing after the chip stays
@@ -160,7 +160,7 @@ export const cssText = `
   padding: 0 6px !important;
   border-radius: 4px !important;
   background: var(--dsw-alias-interactive-bg-hover) !important;
-  color: var(--dsw-alias-state-business-primary) !important;
+  color: var(--dsw-alias-label-primary) !important;
   font-family: var(--ds-font-family-code) !important;
   font-size: 12px !important;
   line-height: 18px !important;
